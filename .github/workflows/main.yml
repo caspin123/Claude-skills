@@ -1,0 +1,340 @@
+name: Build AW Player Dev APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/main.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK 35
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Create AW Player Dev
+        run: |
+          mkdir -p awplayer/app/src/main/java/com/awystudio/awplayer/dev
+          mkdir -p awplayer/app/src/main/res/values
+
+          cat > awplayer/settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "AWPlayerDev"
+          include(":app")
+          EOF
+
+          cat > awplayer/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.9.1' apply false
+          }
+          EOF
+
+          cat > awplayer/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          EOF
+
+          cat > awplayer/app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.awystudio.awplayer.dev'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'com.awystudio.awplayer.dev'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0-dev'
+              }
+
+              buildTypes {
+                  debug {
+                      applicationIdSuffix '.debug'
+                      versionNameSuffix '-debug'
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.media3:media3-exoplayer:1.5.1'
+              implementation 'androidx.media3:media3-ui:1.5.1'
+          }
+          EOF
+
+          cat > awplayer/app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+              <application
+                  android:allowBackup="true"
+                  android:label="AW Player Dev"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:supportsPictureInPicture="true"
+                      android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout">
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+
+                  </activity>
+
+              </application>
+
+          </manifest>
+          EOF
+
+          cat > awplayer/app/src/main/res/values/styles.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+                  <item name="android:windowActionModeOverlay">true</item>
+                  <item name="android:fontFamily">sans</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > awplayer/app/src/main/java/com/awystudio/awplayer/dev/MainActivity.java <<'EOF'
+          package com.awystudio.awplayer.dev;
+
+          import android.app.Activity;
+          import android.app.PictureInPictureParams;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.view.View;
+          import android.widget.Button;
+          import android.widget.EditText;
+          import android.widget.LinearLayout;
+          import android.widget.TextView;
+          import android.widget.Toast;
+
+          import androidx.media3.common.MediaItem;
+          import androidx.media3.exoplayer.ExoPlayer;
+          import androidx.media3.ui.PlayerView;
+
+          public class MainActivity extends Activity {
+
+              private static final int PICK_VIDEO = 100;
+              private ExoPlayer player;
+              private PlayerView playerView;
+              private EditText urlInput;
+              private TextView premiumStatus;
+              private SharedPreferences prefs;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  prefs = getSharedPreferences("dev_flags", MODE_PRIVATE);
+
+                  LinearLayout root = new LinearLayout(this);
+                  root.setOrientation(LinearLayout.VERTICAL);
+                  root.setPadding(24, 24, 24, 24);
+
+                  TextView title = new TextView(this);
+                  title.setText("AW Player Dev");
+                  title.setTextSize(24);
+
+                  premiumStatus = new TextView(this);
+
+                  urlInput = new EditText(this);
+                  urlInput.setHint("Video / HLS / DASH URL");
+
+                  Button playUrl = new Button(this);
+                  playUrl.setText("Play URL");
+
+                  Button openVideo = new Button(this);
+                  openVideo.setText("Open Video");
+
+                  Button premium = new Button(this);
+                  premium.setText("Toggle Dev Premium");
+
+                  Button pip = new Button(this);
+                  pip.setText("Picture in Picture");
+
+                  playerView = new PlayerView(this);
+
+                  root.addView(title);
+                  root.addView(premiumStatus);
+                  root.addView(urlInput);
+                  root.addView(playUrl);
+                  root.addView(openVideo);
+                  root.addView(premium);
+                  root.addView(pip);
+
+                  root.addView(
+                      playerView,
+                      new LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          0,
+                          1f
+                      )
+                  );
+
+                  setContentView(root);
+
+                  player = new ExoPlayer.Builder(this).build();
+                  playerView.setPlayer(player);
+
+                  updatePremium();
+
+                  playUrl.setOnClickListener(v -> {
+                      String url = urlInput.getText().toString().trim();
+
+                      if (url.isEmpty()) {
+                          Toast.makeText(this, "Enter video URL", Toast.LENGTH_SHORT).show();
+                          return;
+                      }
+
+                      play(Uri.parse(url));
+                  });
+
+                  openVideo.setOnClickListener(v -> {
+                      Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                      intent.setType("video/*");
+                      intent.addCategory(Intent.CATEGORY_OPENABLE);
+                      startActivityForResult(intent, PICK_VIDEO);
+                  });
+
+                  premium.setOnClickListener(v -> {
+                      boolean enabled =
+                          prefs.getBoolean("premium_enabled", false);
+
+                      prefs.edit()
+                          .putBoolean("premium_enabled", !enabled)
+                          .apply();
+
+                      updatePremium();
+                  });
+
+                  pip.setOnClickListener(v -> enterPip());
+              }
+
+              private void play(Uri uri) {
+                  MediaItem mediaItem = MediaItem.fromUri(uri);
+                  player.setMediaItem(mediaItem);
+                  player.prepare();
+                  player.play();
+              }
+
+              private void updatePremium() {
+                  boolean enabled =
+                      prefs.getBoolean("premium_enabled", false);
+
+                  premiumStatus.setText(
+                      enabled
+                          ? "Developer Premium: ON"
+                          : "Developer Premium: OFF"
+                  );
+              }
+
+              private void enterPip() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      enterPictureInPictureMode(
+                          new PictureInPictureParams.Builder().build()
+                      );
+                  }
+              }
+
+              @Override
+              protected void onActivityResult(
+                  int requestCode,
+                  int resultCode,
+                  Intent data
+              ) {
+                  super.onActivityResult(requestCode, resultCode, data);
+
+                  if (
+                      requestCode == PICK_VIDEO &&
+                      resultCode == RESULT_OK &&
+                      data != null &&
+                      data.getData() != null
+                  ) {
+                      play(data.getData());
+                  }
+              }
+
+              @Override
+              protected void onDestroy() {
+                  if (player != null) {
+                      player.release();
+                  }
+
+                  super.onDestroy();
+              }
+          }
+          EOF
+
+      - name: Build APK
+        working-directory: awplayer
+        run: |
+          gradle :app:assembleDebug --stacktrace
+
+      - name: Rename APK
+        run: |
+          cp awplayer/app/build/outputs/apk/debug/app-debug.apk AWPlayer-Dev-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AWPlayer-Dev-APK
+          path: AWPlayer-Dev-debug.apk
