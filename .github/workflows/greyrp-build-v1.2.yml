@@ -1,0 +1,2408 @@
+name: Build GreyRP Android APK v1.2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - ".github/workflows/greyrp-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Generate GreyRP project
+        shell: bash
+        run: |
+          mkdir -p "$(dirname 'settings.gradle.kts')"
+          cat > 'settings.gradle.kts' <<'GREYRP_EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "GreyRP"
+          include(":app")
+          GREYRP_EOF
+          
+          mkdir -p "$(dirname 'build.gradle.kts')"
+          cat > 'build.gradle.kts' <<'GREYRP_EOF'
+          plugins {
+              id("com.android.application") version "8.7.3" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+              id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
+          }
+          GREYRP_EOF
+          
+          mkdir -p "$(dirname 'app/build.gradle.kts')"
+          cat > 'app/build.gradle.kts' <<'GREYRP_EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("org.jetbrains.kotlin.plugin.compose")
+          }
+          
+          android {
+              namespace = "com.greyrp.app"
+              compileSdk = 35
+          
+              defaultConfig {
+                  applicationId = "com.greyrp.app"
+                  minSdk = 26
+                  targetSdk = 35
+                  versionCode = 3
+                  versionName = "1.2.0"
+              }
+          
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                      proguardFiles(
+                          getDefaultProguardFile("proguard-android-optimize.txt"),
+                          "proguard-rules.pro"
+                      )
+                  }
+              }
+          
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+          
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          
+              buildFeatures {
+                  compose = true
+                  buildConfig = true
+              }
+          
+              packaging {
+                  resources {
+                      excludes += "/META-INF/{AL2.0,LGPL2.1}"
+                  }
+              }
+          }
+          
+          dependencies {
+              implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+              implementation("androidx.activity:activity-compose:1.10.0")
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.ui:ui-tooling-preview")
+              implementation("androidx.compose.foundation:foundation")
+              implementation("androidx.compose.material3:material3")
+              implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+              implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+              implementation("com.squareup.okhttp3:okhttp:4.12.0")
+              implementation("com.google.mlkit:translate:17.0.3")
+              implementation("com.google.mlkit:language-id:17.0.6")
+              implementation("io.coil-kt:coil-compose:2.7.0")
+          
+              debugImplementation("androidx.compose.ui:ui-tooling")
+          }
+          GREYRP_EOF
+          
+          mkdir -p "$(dirname 'app/proguard-rules.pro')"
+          cat > 'app/proguard-rules.pro' <<'GREYRP_EOF'
+          # GreyRP currently keeps release builds unobfuscated for easier debugging.
+          GREYRP_EOF
+          
+          mkdir -p "$(dirname 'app/src/main/AndroidManifest.xml')"
+          cat > 'app/src/main/AndroidManifest.xml' <<'GREYRP_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+          
+              <application
+                  android:allowBackup="true"
+                  android:label="GreyRP"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.GreyRP"
+                  android:usesCleartextTraffic="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          GREYRP_EOF
+          
+          mkdir -p "$(dirname 'app/src/main/res/values/styles.xml')"
+          cat > 'app/src/main/res/values/styles.xml' <<'GREYRP_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.GreyRP" parent="android:style/Theme.Material.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:statusBarColor">#0D0F11</item>
+                  <item name="android:navigationBarColor">#0D0F11</item>
+                  <item name="android:windowActionModeOverlay">true</item>
+              </style>
+          </resources>
+          GREYRP_EOF
+          
+          mkdir -p "$(dirname 'app/src/main/java/com/greyrp/app/MainActivity.kt')"
+          cat > 'app/src/main/java/com/greyrp/app/MainActivity.kt' <<'GREYRP_EOF'
+          package com.greyrp.app
+          
+          import android.content.Context
+          import android.content.Intent
+          import android.os.Bundle
+          import android.security.keystore.KeyGenParameterSpec
+          import android.security.keystore.KeyProperties
+          import android.util.Base64
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.activity.compose.rememberLauncherForActivityResult
+          import androidx.activity.result.contract.ActivityResultContracts
+          import androidx.compose.foundation.ExperimentalFoundationApi
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.clickable
+          import androidx.compose.foundation.clip
+          import androidx.compose.foundation.combinedClickable
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.itemsIndexed
+          import androidx.compose.foundation.lazy.rememberLazyListState
+          import androidx.compose.foundation.rememberScrollState
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.foundation.text.selection.SelectionContainer
+          import androidx.compose.foundation.verticalScroll
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.runtime.snapshots.SnapshotStateList
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.layout.ContentScale
+          import androidx.compose.ui.platform.LocalClipboardManager
+          import androidx.compose.ui.platform.LocalContext
+          import androidx.compose.ui.text.AnnotatedString
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.text.input.PasswordVisualTransformation
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+          import coil.compose.AsyncImage
+          import com.google.mlkit.common.model.DownloadConditions
+          import com.google.mlkit.nl.languageid.LanguageIdentification
+          import com.google.mlkit.nl.translate.TranslateLanguage
+          import com.google.mlkit.nl.translate.Translation
+          import com.google.mlkit.nl.translate.TranslatorOptions
+          import kotlinx.coroutines.launch
+          import okhttp3.*
+          import okhttp3.MediaType.Companion.toMediaType
+          import okhttp3.RequestBody.Companion.toRequestBody
+          import org.json.JSONArray
+          import org.json.JSONObject
+          import java.io.IOException
+          import java.security.KeyStore
+          import java.util.UUID
+          import javax.crypto.Cipher
+          import javax.crypto.KeyGenerator
+          import javax.crypto.SecretKey
+          import javax.crypto.spec.GCMParameterSpec
+          
+          data class ChatMessage(
+              val id: String = UUID.randomUUID().toString(),
+              val role: String,
+              val content: String,
+              val translated: String? = null
+          )
+          
+          data class CharacterProfile(
+              val id: String = UUID.randomUUID().toString(),
+              val name: String = "Character",
+              val chatName: String = "",
+              val avatarUri: String = "",
+              val description: String = "",
+              val scenario: String = "",
+              val firstGreeting: String = "",
+              val exampleDialogue: String = "",
+              val extraInstructions: String = ""
+          )
+          
+          data class UserPersonaProfile(
+              val id: String = UUID.randomUUID().toString(),
+              val profileName: String = "Default Persona",
+              val userName: String = "User",
+              val description: String = ""
+          )
+          
+          data class LoreEntry(
+              val id: String = UUID.randomUUID().toString(),
+              val title: String = "New Entry",
+              val keys: String = "",
+              val secondaryKeys: String = "",
+              val content: String = "",
+              val enabled: Boolean = true,
+              val constant: Boolean = false,
+              val selective: Boolean = false,
+              val selectiveLogic: Int = 0,
+              val probability: Int = 100,
+              val priority: Int = 50,
+              val scanDepth: Int = 8,
+              val caseSensitive: Boolean = false,
+              val wholeWord: Boolean = false,
+              val position: String = "After Character"
+          )
+          
+          data class Lorebook(
+              val id: String = UUID.randomUUID().toString(),
+              val name: String = "New Lorebook",
+              val description: String = "",
+              val enabled: Boolean = true,
+              val entries: List<LoreEntry> = emptyList()
+          )
+          
+          data class LibraryState(
+              val characters: List<CharacterProfile> = listOf(CharacterProfile()),
+              val personas: List<UserPersonaProfile> = listOf(UserPersonaProfile()),
+              val lorebooks: List<Lorebook> = emptyList(),
+              val activeCharacterId: String = "",
+              val activePersonaId: String = "",
+              val activeLorebookIds: List<String> = emptyList()
+          ) {
+              fun activeCharacter(): CharacterProfile =
+                  characters.firstOrNull { it.id == activeCharacterId } ?: characters.firstOrNull() ?: CharacterProfile()
+          
+              fun activePersona(): UserPersonaProfile =
+                  personas.firstOrNull { it.id == activePersonaId } ?: personas.firstOrNull() ?: UserPersonaProfile()
+          }
+          
+          data class AppSettings(
+              val provider: String = "OpenRouter",
+              val customEndpoint: String = "",
+              val model: String = "z-ai/glm-5.3-flash",
+              val apiKey: String = "",
+              val extraHeaders: String = "",
+              val temperature: Float = 0.9f,
+              val maxTokens: Int = 8192,
+              val topP: Float = 0.95f,
+              val includeTopK: Boolean = true,
+              val topK: Int = 40,
+              val includeMinP: Boolean = false,
+              val minP: Float = 0.05f,
+              val includeFrequencyPenalty: Boolean = false,
+              val frequencyPenalty: Float = 0f,
+              val includePresencePenalty: Boolean = false,
+              val presencePenalty: Float = 0f,
+              val includeRepetitionPenalty: Boolean = false,
+              val repetitionPenalty: Float = 1f,
+              val includeSeed: Boolean = false,
+              val seed: Int = 1,
+              val stopSequences: String = "",
+              val stream: Boolean = true,
+              val includeReasoning: Boolean = false,
+              val reasoningEffort: String = "low",
+              val reasoningMaxTokens: Int = 0,
+              val excludeReasoning: Boolean = true,
+              val translateReplies: Boolean = true,
+              val translationWifiOnly: Boolean = false,
+              val showOriginal: Boolean = true,
+              val contextMode: String = "Full",
+              val recentMessageCount: Int = 80,
+              val systemPrompt: String = "Write immersive roleplay. Stay in character, maintain continuity, and avoid controlling the user's character.",
+              val loreMaxEntries: Int = 0,
+              val loreMaxChars: Int = 0
+          )
+          
+          class MainActivity : ComponentActivity() {
+              private lateinit var apiClient: RpApiClient
+              private var activeCall: Call? = null
+          
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  apiClient = RpApiClient()
+          
+                  setContent {
+                      GreyTheme {
+                          val settingsState = remember { mutableStateOf(SettingsStore.load(this)) }
+                          val libraryState = remember { mutableStateOf(LibraryStore.load(this)) }
+                          val messages = remember {
+                              mutableStateListOf<ChatMessage>().apply {
+                                  addAll(SettingsStore.loadMessages(this@MainActivity))
+                              }
+                          }
+                          var sending by remember { mutableStateOf(false) }
+                          var status by remember { mutableStateOf("جاهز") }
+                          var screen by remember { mutableIntStateOf(0) }
+          
+                          val character = libraryState.value.activeCharacter()
+                          val persona = libraryState.value.activePersona()
+          
+                          Surface(Modifier.fillMaxSize()) {
+                              Scaffold(
+                                  containerColor = GreyBg,
+                                  bottomBar = {
+                                      NavigationBar(containerColor = GreyPanel) {
+                                          NavigationBarItem(
+                                              selected = screen == 0,
+                                              onClick = { screen = 0 },
+                                              icon = { Text("●", fontSize = 15.sp) },
+                                              label = { Text("المحادثة") }
+                                          )
+                                          NavigationBarItem(
+                                              selected = screen == 1,
+                                              onClick = { screen = 1 },
+                                              icon = { Text("◆", fontSize = 15.sp) },
+                                              label = { Text("Studio") }
+                                          )
+                                          NavigationBarItem(
+                                              selected = screen == 2,
+                                              onClick = { screen = 2 },
+                                              icon = { Text("⚙", fontSize = 16.sp) },
+                                              label = { Text("الإعدادات") }
+                                          )
+                                      }
+                                  }
+                              ) { padding ->
+                                  when (screen) {
+                                      0 -> ChatScreen(
+                                          modifier = Modifier.padding(padding),
+                                          settings = settingsState.value,
+                                          character = character,
+                                          persona = persona,
+                                          messages = messages,
+                                          sending = sending,
+                                          status = status,
+                                          onSend = { text ->
+                                              if (text.isBlank() || sending) return@ChatScreen
+                                              messages += ChatMessage(role = "user", content = text.trim())
+                                              SettingsStore.saveMessages(this, messages)
+                                              sending = true
+                                              status = "جاري التوليد…"
+                                              startGeneration(
+                                                  settingsState.value,
+                                                  libraryState.value,
+                                                  messages,
+                                                  onDelta = { delta ->
+                                                      runOnUiThread {
+                                                          val idx = messages.indexOfLast { it.role == "assistant" }
+                                                          if (idx >= 0 && messages[idx].id == STREAM_ID) {
+                                                              messages[idx] = messages[idx].copy(content = messages[idx].content + delta)
+                                                          } else {
+                                                              messages += ChatMessage(id = STREAM_ID, role = "assistant", content = delta)
+                                                          }
+                                                      }
+                                                  },
+                                                  onComplete = {
+                                                      runOnUiThread {
+                                                          val idx = messages.indexOfLast { it.id == STREAM_ID }
+                                                          if (idx >= 0) {
+                                                              val final = messages[idx].copy(id = UUID.randomUUID().toString())
+                                                              messages[idx] = final
+                                                              SettingsStore.saveMessages(this, messages)
+                                                              if (settingsState.value.translateReplies && final.content.isNotBlank()) {
+                                                                  status = "جاري الترجمة…"
+                                                                  GoogleTranslator.translateToArabic(
+                                                                      this,
+                                                                      final.content,
+                                                                      settingsState.value.translationWifiOnly,
+                                                                      onSuccess = { ar ->
+                                                                          runOnUiThread {
+                                                                              val i = messages.indexOfFirst { it.id == final.id }
+                                                                              if (i >= 0) {
+                                                                                  messages[i] = messages[i].copy(translated = ar)
+                                                                                  SettingsStore.saveMessages(this, messages)
+                                                                              }
+                                                                              sending = false
+                                                                              status = "جاهز"
+                                                                          }
+                                                                      },
+                                                                      onError = {
+                                                                          runOnUiThread {
+                                                                              sending = false
+                                                                              status = "اكتمل الرد • تعذرت الترجمة"
+                                                                          }
+                                                                      }
+                                                                  )
+                                                              } else {
+                                                                  sending = false
+                                                                  status = "جاهز"
+                                                              }
+                                                          } else {
+                                                              sending = false
+                                                              status = "لم يصل نص"
+                                                          }
+                                                      }
+                                                  },
+                                                  onError = { error ->
+                                                      runOnUiThread {
+                                                          val idx = messages.indexOfLast { it.id == STREAM_ID }
+                                                          if (idx >= 0 && messages[idx].content.isBlank()) messages.removeAt(idx)
+                                                          sending = false
+                                                          status = "خطأ: $error"
+                                                      }
+                                                  }
+                                              )
+                                          },
+                                          onStop = {
+                                              activeCall?.cancel()
+                                              activeCall = null
+                                              sending = false
+                                              status = "تم الإيقاف"
+                                              val idx = messages.indexOfLast { it.id == STREAM_ID }
+                                              if (idx >= 0) {
+                                                  messages[idx] = messages[idx].copy(id = UUID.randomUUID().toString())
+                                                  SettingsStore.saveMessages(this, messages)
+                                              }
+                                          },
+                                          onClear = {
+                                              activeCall?.cancel()
+                                              startFreshChat(libraryState.value, messages)
+                                              status = "محادثة جديدة"
+                                          },
+                                          onRegenerate = {
+                                              if (sending) return@ChatScreen
+                                              val lastAssistant = messages.indexOfLast { it.role == "assistant" }
+                                              if (lastAssistant >= 0) {
+                                                  messages.removeAt(lastAssistant)
+                                                  SettingsStore.saveMessages(this, messages)
+                                                  sending = true
+                                                  status = "إعادة التوليد…"
+                                                  startGeneration(
+                                                      settingsState.value,
+                                                      libraryState.value,
+                                                      messages,
+                                                      onDelta = { delta ->
+                                                          runOnUiThread {
+                                                              val idx = messages.indexOfLast { it.id == STREAM_ID }
+                                                              if (idx >= 0) messages[idx] = messages[idx].copy(content = messages[idx].content + delta)
+                                                              else messages += ChatMessage(id = STREAM_ID, role = "assistant", content = delta)
+                                                          }
+                                                      },
+                                                      onComplete = {
+                                                          runOnUiThread {
+                                                              val idx = messages.indexOfLast { it.id == STREAM_ID }
+                                                              if (idx >= 0) {
+                                                                  messages[idx] = messages[idx].copy(id = UUID.randomUUID().toString())
+                                                                  SettingsStore.saveMessages(this, messages)
+                                                              }
+                                                              sending = false
+                                                              status = "جاهز"
+                                                          }
+                                                      },
+                                                      onError = { err ->
+                                                          runOnUiThread {
+                                                              sending = false
+                                                              status = "خطأ: $err"
+                                                          }
+                                                      }
+                                                  )
+                                              }
+                                          },
+                                          onTranslate = { index ->
+                                              if (index !in messages.indices) return@ChatScreen
+                                              val m = messages[index]
+                                              status = "جاري الترجمة…"
+                                              GoogleTranslator.translateToArabic(
+                                                  this,
+                                                  m.content,
+                                                  settingsState.value.translationWifiOnly,
+                                                  onSuccess = { ar ->
+                                                      runOnUiThread {
+                                                          if (index in messages.indices && messages[index].id == m.id) {
+                                                              messages[index] = m.copy(translated = ar)
+                                                              SettingsStore.saveMessages(this, messages)
+                                                          }
+                                                          status = "جاهز"
+                                                      }
+                                                  },
+                                                  onError = { err -> runOnUiThread { status = "تعذرت الترجمة: $err" } }
+                                              )
+                                          }
+                                      )
+          
+                                      1 -> StudioScreen(
+                                          modifier = Modifier.padding(padding),
+                                          library = libraryState.value,
+                                          onSaveLibrary = { updated ->
+                                              libraryState.value = normalizeLibrary(updated)
+                                              LibraryStore.save(this, libraryState.value)
+                                              status = "تم الحفظ"
+                                          },
+                                          onUseCharacter = { charId ->
+                                              val updated = normalizeLibrary(libraryState.value.copy(activeCharacterId = charId))
+                                              libraryState.value = updated
+                                              LibraryStore.save(this, updated)
+                                              startFreshChat(updated, messages)
+                                              screen = 0
+                                              status = "تم تبديل الشخصية"
+                                          },
+                                          onUsePersona = { personaId ->
+                                              val updated = normalizeLibrary(libraryState.value.copy(activePersonaId = personaId))
+                                              libraryState.value = updated
+                                              LibraryStore.save(this, updated)
+                                              status = "تم تفعيل الـPersona"
+                                          }
+                                      )
+          
+                                      else -> SettingsScreen(
+                                          modifier = Modifier.padding(padding),
+                                          settings = settingsState.value,
+                                          onSave = { updated ->
+                                              settingsState.value = updated
+                                              SettingsStore.save(this, updated)
+                                              status = "تم حفظ الإعدادات"
+                                          }
+                                      )
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+          
+              private fun startFreshChat(library: LibraryState, messages: SnapshotStateList<ChatMessage>) {
+                  messages.clear()
+                  val character = library.activeCharacter()
+                  val persona = library.activePersona()
+                  val greeting = applyMacros(character.firstGreeting, character, persona).trim()
+                  if (greeting.isNotBlank()) messages += ChatMessage(role = "assistant", content = greeting)
+                  SettingsStore.saveMessages(this, messages)
+              }
+          
+              private fun startGeneration(
+                  settings: AppSettings,
+                  library: LibraryState,
+                  messages: List<ChatMessage>,
+                  onDelta: (String) -> Unit,
+                  onComplete: () -> Unit,
+                  onError: (String) -> Unit
+              ) {
+                  if (settings.apiKey.isBlank() && settings.provider == "OpenRouter") {
+                      onError("أضف API Key أولاً من الإعدادات")
+                      return
+                  }
+                  if (settings.model.isBlank()) {
+                      onError("اسم الموديل فارغ")
+                      return
+                  }
+                  val prepared = prepareContext(settings, library, messages)
+                  activeCall = apiClient.chat(settings, prepared, onDelta, onComplete, onError)
+              }
+          
+              private fun prepareContext(
+                  settings: AppSettings,
+                  library: LibraryState,
+                  messages: List<ChatMessage>
+              ): List<ChatMessage> {
+                  val base = if (settings.contextMode == "Recent") {
+                      messages.takeLast(settings.recentMessageCount.coerceAtLeast(2))
+                  } else messages
+          
+                  val character = library.activeCharacter()
+                  val persona = library.activePersona()
+                  val lore = resolveLore(settings, library, base, character, persona)
+          
+                  val beforeCharacter = lore.filter { it.position == "Before Character" }
+                  val afterCharacter = lore.filter { it.position == "After Character" }
+                  val beforeChat = lore.filter { it.position == "Before Chat" }
+          
+                  fun loreBlock(entries: List<LoreEntry>): String = entries.joinToString("\n\n") { e ->
+                      "[Lore: ${e.title}]\n${applyMacros(e.content, character, persona)}"
+                  }
+          
+                  val systemText = buildString {
+                      if (settings.systemPrompt.isNotBlank()) appendLine(applyMacros(settings.systemPrompt.trim(), character, persona))
+                      if (beforeCharacter.isNotEmpty()) appendLine("\n${loreBlock(beforeCharacter)}")
+                      appendLine("\nCharacter name: ${character.name.ifBlank { "Character" }}")
+                      if (character.chatName.isNotBlank()) appendLine("Chat display name: ${character.chatName.trim()}")
+                      if (character.description.isNotBlank()) appendLine("\nCharacter description:\n${applyMacros(character.description.trim(), character, persona)}")
+                      if (character.extraInstructions.isNotBlank()) appendLine("\nCharacter instructions:\n${applyMacros(character.extraInstructions.trim(), character, persona)}")
+                      if (afterCharacter.isNotEmpty()) appendLine("\n${loreBlock(afterCharacter)}")
+                      if (character.scenario.isNotBlank()) appendLine("\nScenario:\n${applyMacros(character.scenario.trim(), character, persona)}")
+                      if (persona.description.isNotBlank() || persona.userName.isNotBlank()) {
+                          appendLine("\nUser persona (${persona.userName.ifBlank { "User" }}):\n${applyMacros(persona.description.trim(), character, persona)}")
+                      }
+                      if (character.exampleDialogue.isNotBlank()) appendLine("\nExample dialogue:\n${applyMacros(character.exampleDialogue.trim(), character, persona)}")
+                      if (beforeChat.isNotEmpty()) appendLine("\n${loreBlock(beforeChat)}")
+                      appendLine("\nMacro names: {{char}} = ${character.name.ifBlank { "Character" }}, {{user}} = ${persona.userName.ifBlank { "User" }}")
+                  }.trim()
+          
+                  return buildList {
+                      if (systemText.isNotBlank()) add(ChatMessage(role = "system", content = systemText))
+                      addAll(base.filter { it.content.isNotBlank() })
+                  }
+              }
+          
+              companion object {
+                  private const val STREAM_ID = "__streaming__"
+              }
+          }
+          
+          private val GreyBg = Color(0xFF0D0F11)
+          private val GreyPanel = Color(0xFF15181B)
+          private val GreyCard = Color(0xFF1B1F23)
+          private val GreyCard2 = Color(0xFF22272C)
+          private val Steel = Color(0xFFB7C2CC)
+          private val SteelDim = Color(0xFF8D9AA5)
+          private val OnDark = Color(0xFFE8ECEF)
+          
+          @Composable
+          fun GreyTheme(content: @Composable () -> Unit) {
+              val scheme = darkColorScheme(
+                  primary = Steel,
+                  onPrimary = Color(0xFF111315),
+                  secondary = SteelDim,
+                  background = GreyBg,
+                  onBackground = OnDark,
+                  surface = GreyPanel,
+                  onSurface = OnDark,
+                  surfaceVariant = GreyCard2,
+                  outline = Color(0xFF48515A)
+              )
+              MaterialTheme(colorScheme = scheme, typography = Typography(), content = content)
+          }
+          
+          @OptIn(ExperimentalFoundationApi::class)
+          @Composable
+          fun ChatScreen(
+              modifier: Modifier,
+              settings: AppSettings,
+              character: CharacterProfile,
+              persona: UserPersonaProfile,
+              messages: SnapshotStateList<ChatMessage>,
+              sending: Boolean,
+              status: String,
+              onSend: (String) -> Unit,
+              onStop: () -> Unit,
+              onClear: () -> Unit,
+              onRegenerate: () -> Unit,
+              onTranslate: (Int) -> Unit
+          ) {
+              var input by remember { mutableStateOf("") }
+              val listState = rememberLazyListState()
+              val scope = rememberCoroutineScope()
+              val clipboard = LocalClipboardManager.current
+              val displayName = character.chatName.ifBlank { character.name.ifBlank { "GreyRP" } }
+              val userName = persona.userName.ifBlank { "YOU" }
+          
+              LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
+                  if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+              }
+          
+              Column(modifier.fillMaxSize().background(GreyBg)) {
+                  Row(
+                      Modifier.fillMaxWidth().background(GreyPanel).padding(horizontal = 12.dp, vertical = 9.dp),
+                      verticalAlignment = Alignment.CenterVertically
+                  ) {
+                      if (character.avatarUri.isNotBlank()) {
+                          AsyncImage(
+                              model = character.avatarUri,
+                              contentDescription = displayName,
+                              contentScale = ContentScale.Crop,
+                              modifier = Modifier.size(42.dp).clip(RoundedCornerShape(13.dp))
+                          )
+                          Spacer(Modifier.width(10.dp))
+                      }
+                      Column(Modifier.weight(1f)) {
+                          Text(displayName, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                          Text(
+                              "${settings.model.ifBlank { "No model" }} • $status",
+                              fontSize = 11.sp,
+                              color = SteelDim,
+                              maxLines = 1
+                          )
+                      }
+                      TextButton(onClick = onRegenerate, enabled = !sending && messages.any { it.role == "assistant" }) { Text("Regen") }
+                      TextButton(onClick = onClear) { Text("New") }
+                  }
+          
+                  if (settings.contextMode == "Full") {
+                      Surface(color = Color(0xFF121619), modifier = Modifier.fillMaxWidth()) {
+                          Text(
+                              "FULL CONTEXT • لا يوجد سقف 128K داخل GreyRP • حد الموديل/المزوّد فقط",
+                              modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                              color = SteelDim,
+                              fontSize = 10.sp
+                          )
+                      }
+                  }
+          
+                  LazyColumn(
+                      modifier = Modifier.weight(1f).fillMaxWidth(),
+                      state = listState,
+                      contentPadding = PaddingValues(12.dp),
+                      verticalArrangement = Arrangement.spacedBy(10.dp)
+                  ) {
+                      if (messages.isEmpty()) item { EmptyChatCard(settings, character, persona) }
+                      itemsIndexed(messages, key = { _, item -> item.id }) { index, msg ->
+                          val isUser = msg.role == "user"
+                          Row(Modifier.fillMaxWidth(), horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start) {
+                              Surface(
+                                  modifier = Modifier
+                                      .fillMaxWidth(if (isUser) 0.86f else 0.96f)
+                                      .combinedClickable(onClick = {}, onLongClick = { clipboard.setText(AnnotatedString(msg.content)) }),
+                                  color = if (isUser) GreyCard2 else GreyCard,
+                                  shape = RoundedCornerShape(18.dp)
+                              ) {
+                                  Column(Modifier.padding(14.dp)) {
+                                      Row(verticalAlignment = Alignment.CenterVertically) {
+                                          Text(
+                                              if (isUser) userName.uppercase() else displayName.uppercase(),
+                                              color = Steel,
+                                              fontSize = 10.sp,
+                                              fontWeight = FontWeight.Bold,
+                                              modifier = Modifier.weight(1f)
+                                          )
+                                          if (!isUser && msg.id != "__streaming__") {
+                                              TextButton(onClick = { onTranslate(index) }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                                                  Text("AR", fontSize = 11.sp)
+                                              }
+                                          }
+                                      }
+                                      SelectionContainer {
+                                          Column {
+                                              if (settings.showOriginal || msg.translated == null) Text(msg.content, color = OnDark, lineHeight = 21.sp)
+                                              msg.translated?.let { ar ->
+                                                  if (settings.showOriginal) {
+                                                      Spacer(Modifier.height(10.dp)); HorizontalDivider(color = Color(0xFF333A41)); Spacer(Modifier.height(10.dp))
+                                                  }
+                                                  Text(ar, color = Color(0xFFF1F3F4), lineHeight = 22.sp)
+                                              }
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+          
+                  Column(Modifier.fillMaxWidth().background(GreyPanel).padding(10.dp)) {
+                      OutlinedTextField(
+                          value = input,
+                          onValueChange = { input = it },
+                          modifier = Modifier.fillMaxWidth(),
+                          placeholder = { Text("اكتب ردك باسم $userName…") },
+                          minLines = 1,
+                          maxLines = 6,
+                          shape = RoundedCornerShape(16.dp)
+                      )
+                      Spacer(Modifier.height(8.dp))
+                      Row(verticalAlignment = Alignment.CenterVertically) {
+                          Text(
+                              "T ${"%.2f".format(settings.temperature)} • Max ${settings.maxTokens} • ${if (settings.stream) "Stream" else "Single"}",
+                              modifier = Modifier.weight(1f), fontSize = 10.sp, color = SteelDim
+                          )
+                          if (sending) OutlinedButton(onClick = onStop) { Text("Stop") }
+                          else Button(
+                              onClick = {
+                                  val text = input; input = ""; onSend(text)
+                                  scope.launch { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex) }
+                              },
+                              enabled = input.isNotBlank()
+                          ) { Text("Send") }
+                      }
+                  }
+              }
+          }
+          
+          @Composable
+          private fun EmptyChatCard(settings: AppSettings, character: CharacterProfile, persona: UserPersonaProfile) {
+              Surface(color = GreyCard, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+                  Column(Modifier.padding(20.dp)) {
+                      Text(character.chatName.ifBlank { character.name.ifBlank { "GreyRP" } }, fontSize = 27.sp, fontWeight = FontWeight.Bold, color = Steel)
+                      Spacer(Modifier.height(7.dp))
+                      Text("Persona: ${persona.profileName} • {{user}} = ${persona.userName.ifBlank { "User" }}", color = SteelDim, fontSize = 12.sp)
+                      Spacer(Modifier.height(6.dp))
+                      Text("{{char}} / {char} و {{user}} / {user} مدعومة في البطاقة والـLorebook.", color = SteelDim, fontSize = 11.sp)
+                      Spacer(Modifier.height(10.dp))
+                      Text("الموديل: ${settings.model}", color = SteelDim, fontSize = 12.sp)
+                  }
+              }
+          }
+          
+          @Composable
+          fun StudioScreen(
+              modifier: Modifier,
+              library: LibraryState,
+              onSaveLibrary: (LibraryState) -> Unit,
+              onUseCharacter: (String) -> Unit,
+              onUsePersona: (String) -> Unit
+          ) {
+              var tab by remember { mutableStateOf("Character") }
+              Column(modifier.fillMaxSize().background(GreyBg)) {
+                  Column(Modifier.fillMaxWidth().background(GreyPanel).padding(12.dp)) {
+                      SectionTitle("RP STUDIO", "Characters • Personas • Lorebooks")
+                      Spacer(Modifier.height(8.dp))
+                      SegmentedButtonRow(listOf("Character", "Persona", "Lorebook"), tab) { tab = it }
+                  }
+                  when (tab) {
+                      "Character" -> CharacterLibraryEditor(Modifier.weight(1f), library, onSaveLibrary, onUseCharacter)
+                      "Persona" -> PersonaLibraryEditor(Modifier.weight(1f), library, onSaveLibrary, onUsePersona)
+                      else -> LorebookLibraryEditor(Modifier.weight(1f), library, onSaveLibrary)
+                  }
+              }
+          }
+          
+          @Composable
+          private fun CharacterLibraryEditor(
+              modifier: Modifier,
+              library: LibraryState,
+              onSaveLibrary: (LibraryState) -> Unit,
+              onUseCharacter: (String) -> Unit
+          ) {
+              val context = LocalContext.current
+              var draft by remember(library.activeCharacterId, library.characters.size) { mutableStateOf(library.activeCharacter()) }
+              val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                  if (uri != null) {
+                      try { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+                      draft = draft.copy(avatarUri = uri.toString())
+                  }
+              }
+          
+              Column(modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                  SectionTitle("CHARACTER LIBRARY", "اصنع أكثر من شخصية واختر النشطة للمحادثة")
+                  library.characters.forEach { c ->
+                      LibraryRow(
+                          title = c.chatName.ifBlank { c.name },
+                          subtitle = if (c.id == library.activeCharacterId) "ACTIVE • ${c.name}" else c.name,
+                          selected = c.id == draft.id,
+                          onEdit = { draft = c },
+                          onUse = { onUseCharacter(c.id) },
+                          onDelete = if (library.characters.size > 1) ({
+                              val chars = library.characters.filterNot { it.id == c.id }
+                              val active = if (library.activeCharacterId == c.id) chars.first().id else library.activeCharacterId
+                              onSaveLibrary(library.copy(characters = chars, activeCharacterId = active))
+                              if (draft.id == c.id) draft = chars.first()
+                          }) else null
+                      )
+                  }
+                  OutlinedButton(onClick = { draft = CharacterProfile(name = "") }, modifier = Modifier.fillMaxWidth()) { Text("+ NEW CHARACTER") }
+                  HorizontalDivider()
+          
+                  if (draft.avatarUri.isNotBlank()) {
+                      AsyncImage(
+                          model = draft.avatarUri,
+                          contentDescription = "Character avatar",
+                          contentScale = ContentScale.Crop,
+                          modifier = Modifier.size(110.dp).align(Alignment.CenterHorizontally).clip(RoundedCornerShape(24.dp))
+                      )
+                  }
+                  Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                      OutlinedButton(onClick = { imagePicker.launch(arrayOf("image/*")) }, modifier = Modifier.weight(1f)) { Text("Choose Image") }
+                      if (draft.avatarUri.isNotBlank()) OutlinedButton(onClick = { draft = draft.copy(avatarUri = "") }, modifier = Modifier.weight(1f)) { Text("Remove") }
+                  }
+                  GreyField("Character Name • {{char}}", draft.name, { draft = draft.copy(name = it) }, singleLine = true, hint = "مثال: Seraphine")
+                  GreyField("Chat Name", draft.chatName, { draft = draft.copy(chatName = it) }, singleLine = true, hint = "الاسم الذي يظهر فوق الرسائل")
+                  GreyField("Description / Personality", draft.description, { draft = draft.copy(description = it) }, minLines = 7)
+                  GreyField("Scenario", draft.scenario, { draft = draft.copy(scenario = it) }, minLines = 5)
+                  GreyField("First Greeting", draft.firstGreeting, { draft = draft.copy(firstGreeting = it) }, minLines = 6, hint = "يدعم {{char}} و {{user}}")
+                  GreyField("Example Dialogue", draft.exampleDialogue, { draft = draft.copy(exampleDialogue = it) }, minLines = 7, hint = "{{char}}: ...\n{{user}}: ...")
+                  GreyField("Extra Character Instructions", draft.extraInstructions, { draft = draft.copy(extraInstructions = it) }, minLines = 4)
+                  MacroHelpCard()
+          
+                  Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                      OutlinedButton(
+                          onClick = {
+                              val clean = draft.copy(name = draft.name.ifBlank { "Character" })
+                              val exists = library.characters.any { it.id == clean.id }
+                              val chars = if (exists) library.characters.map { if (it.id == clean.id) clean else it } else library.characters + clean
+                              val active = library.activeCharacterId.ifBlank { clean.id }
+                              onSaveLibrary(library.copy(characters = chars, activeCharacterId = active))
+                              draft = clean
+                          },
+                          modifier = Modifier.weight(1f)
+                      ) { Text("SAVE") }
+                      Button(
+                          onClick = {
+                              val clean = draft.copy(name = draft.name.ifBlank { "Character" })
+                              val exists = library.characters.any { it.id == clean.id }
+                              val chars = if (exists) library.characters.map { if (it.id == clean.id) clean else it } else library.characters + clean
+                              onSaveLibrary(library.copy(characters = chars, activeCharacterId = clean.id))
+                              onUseCharacter(clean.id)
+                          },
+                          modifier = Modifier.weight(1f)
+                      ) { Text("USE + NEW CHAT") }
+                  }
+                  Spacer(Modifier.height(18.dp))
+              }
+          }
+          
+          @Composable
+          private fun PersonaLibraryEditor(
+              modifier: Modifier,
+              library: LibraryState,
+              onSaveLibrary: (LibraryState) -> Unit,
+              onUsePersona: (String) -> Unit
+          ) {
+              var draft by remember(library.activePersonaId, library.personas.size) { mutableStateOf(library.activePersona()) }
+              Column(modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                  SectionTitle("USER PERSONAS", "سوِّ أكثر من نسخة لشخصيتك واختار {{user}} النشط")
+                  library.personas.forEach { p ->
+                      LibraryRow(
+                          title = p.profileName.ifBlank { p.userName },
+                          subtitle = if (p.id == library.activePersonaId) "ACTIVE • {{user}} = ${p.userName}" else "{{user}} = ${p.userName}",
+                          selected = p.id == draft.id,
+                          onEdit = { draft = p },
+                          onUse = { onUsePersona(p.id) },
+                          onDelete = if (library.personas.size > 1) ({
+                              val items = library.personas.filterNot { it.id == p.id }
+                              val active = if (library.activePersonaId == p.id) items.first().id else library.activePersonaId
+                              onSaveLibrary(library.copy(personas = items, activePersonaId = active))
+                              if (draft.id == p.id) draft = items.first()
+                          }) else null
+                      )
+                  }
+                  OutlinedButton(onClick = { draft = UserPersonaProfile(profileName = "", userName = "") }, modifier = Modifier.fillMaxWidth()) { Text("+ NEW PERSONA") }
+                  HorizontalDivider()
+                  GreyField("Persona Profile Name", draft.profileName, { draft = draft.copy(profileName = it) }, singleLine = true, hint = "مثال: Fantasy Me / Casual Me")
+                  GreyField("Your Name • {{user}}", draft.userName, { draft = draft.copy(userName = it) }, singleLine = true)
+                  GreyField("Describe Yourself / Persona", draft.description, { draft = draft.copy(description = it) }, minLines = 8, hint = "المظهر، الطباع، الخلفية، علاقتك بالشخصية...")
+                  MacroHelpCard()
+                  Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                      OutlinedButton(
+                          onClick = {
+                              val clean = draft.copy(profileName = draft.profileName.ifBlank { "Persona" }, userName = draft.userName.ifBlank { "User" })
+                              val exists = library.personas.any { it.id == clean.id }
+                              val items = if (exists) library.personas.map { if (it.id == clean.id) clean else it } else library.personas + clean
+                              val active = library.activePersonaId.ifBlank { clean.id }
+                              onSaveLibrary(library.copy(personas = items, activePersonaId = active))
+                              draft = clean
+                          },
+                          modifier = Modifier.weight(1f)
+                      ) { Text("SAVE") }
+                      Button(
+                          onClick = {
+                              val clean = draft.copy(profileName = draft.profileName.ifBlank { "Persona" }, userName = draft.userName.ifBlank { "User" })
+                              val exists = library.personas.any { it.id == clean.id }
+                              val items = if (exists) library.personas.map { if (it.id == clean.id) clean else it } else library.personas + clean
+                              onSaveLibrary(library.copy(personas = items, activePersonaId = clean.id))
+                              onUsePersona(clean.id)
+                          },
+                          modifier = Modifier.weight(1f)
+                      ) { Text("SET ACTIVE") }
+                  }
+                  Spacer(Modifier.height(18.dp))
+              }
+          }
+          
+          @Composable
+          private fun LorebookLibraryEditor(
+              modifier: Modifier,
+              library: LibraryState,
+              onSaveLibrary: (LibraryState) -> Unit
+          ) {
+              val context = LocalContext.current
+              var bookDraft by remember { mutableStateOf(library.lorebooks.firstOrNull() ?: Lorebook(name = "")) }
+              var entryDraft by remember(bookDraft.id) { mutableStateOf(bookDraft.entries.firstOrNull() ?: LoreEntry(title = "")) }
+              var ioMessage by remember { mutableStateOf("") }
+          
+              fun saveBook(book: Lorebook) {
+                  val clean = book.copy(name = book.name.ifBlank { "Lorebook" })
+                  val exists = library.lorebooks.any { it.id == clean.id }
+                  val books = if (exists) library.lorebooks.map { if (it.id == clean.id) clean else it } else library.lorebooks + clean
+                  onSaveLibrary(library.copy(lorebooks = books))
+                  bookDraft = clean
+              }
+          
+              val importLorebook = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                  if (uri != null) {
+                      try {
+                          val raw = context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                              ?: error("Unable to read the selected file")
+                          val imported = LorebookJsonCodec.importAny(raw, uri.lastPathSegment ?: "Imported Lorebook")
+                          val books = library.lorebooks + imported.lorebook
+                          onSaveLibrary(library.copy(
+                              lorebooks = books,
+                              activeLorebookIds = (library.activeLorebookIds + imported.lorebook.id).distinct()
+                          ))
+                          bookDraft = imported.lorebook
+                          entryDraft = imported.lorebook.entries.firstOrNull() ?: LoreEntry(title = "")
+                          ioMessage = "Imported ${imported.lorebook.entries.size} entries • ${imported.format}"
+                      } catch (e: Exception) {
+                          ioMessage = "Import failed: ${e.message ?: "Invalid JSON"}"
+                      }
+                  }
+              }
+          
+              val exportJanitor = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+                  if (uri != null) {
+                      try {
+                          context.contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use {
+                              it.write(LorebookJsonCodec.exportJanitor(bookDraft))
+                          } ?: error("Unable to create export file")
+                          ioMessage = "Janitor-compatible JSON exported"
+                      } catch (e: Exception) {
+                          ioMessage = "Export failed: ${e.message ?: "Unknown error"}"
+                      }
+                  }
+              }
+          
+              Column(modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                  SectionTitle("LOREBOOK", "Janitor JSON import • keyword-triggered world info")
+                  Surface(color = Color(0xFF121619), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                      Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                          Text("JANITORAI JSON", fontWeight = FontWeight.SemiBold)
+                          Text(
+                              "Import a JanitorAI lorebook directly. GreyRP auto-detects bare Janitor entry arrays, object-based lorebooks, SillyTavern-style entries, and character-book JSON.",
+                              color = SteelDim, fontSize = 10.sp
+                          )
+                          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                              Button(
+                                  onClick = { importLorebook.launch(arrayOf("application/json", "text/json", "text/plain")) },
+                                  modifier = Modifier.weight(1f)
+                              ) { Text("IMPORT JSON") }
+                              OutlinedButton(
+                                  onClick = {
+                                      val name = LorebookJsonCodec.safeFileName(bookDraft.name.ifBlank { "greyrp-lorebook" })
+                                      exportJanitor.launch("$name.janitor.json")
+                                  },
+                                  enabled = bookDraft.entries.isNotEmpty(),
+                                  modifier = Modifier.weight(1f)
+                              ) { Text("EXPORT JSON") }
+                          }
+                          if (ioMessage.isNotBlank()) Text(ioMessage, color = SteelDim, fontSize = 10.sp)
+                      }
+                  }
+          
+                  library.lorebooks.forEach { book ->
+                      val active = library.activeLorebookIds.contains(book.id)
+                      Surface(color = if (book.id == bookDraft.id) GreyCard2 else GreyCard, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                          Column(Modifier.padding(12.dp)) {
+                              Row(verticalAlignment = Alignment.CenterVertically) {
+                                  Column(Modifier.weight(1f).clickable { bookDraft = book; entryDraft = book.entries.firstOrNull() ?: LoreEntry(title = "") }) {
+                                      Text(book.name, fontWeight = FontWeight.SemiBold)
+                                      Text("${book.entries.size} entries • ${if (active) "LINKED" else "Not linked"}", color = SteelDim, fontSize = 10.sp)
+                                  }
+                                  Switch(checked = active, onCheckedChange = { checked ->
+                                      val ids = if (checked) (library.activeLorebookIds + book.id).distinct() else library.activeLorebookIds - book.id
+                                      onSaveLibrary(library.copy(activeLorebookIds = ids))
+                                  })
+                              }
+                              Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                  TextButton(onClick = { bookDraft = book; entryDraft = book.entries.firstOrNull() ?: LoreEntry(title = "") }) { Text("Edit") }
+                                  TextButton(onClick = {
+                                      val books = library.lorebooks.filterNot { it.id == book.id }
+                                      onSaveLibrary(library.copy(lorebooks = books, activeLorebookIds = library.activeLorebookIds - book.id))
+                                      if (bookDraft.id == book.id) {
+                                          bookDraft = books.firstOrNull() ?: Lorebook(name = "")
+                                          entryDraft = bookDraft.entries.firstOrNull() ?: LoreEntry(title = "")
+                                      }
+                                  }) { Text("Delete") }
+                              }
+                          }
+                      }
+                  }
+                  OutlinedButton(
+                      onClick = { bookDraft = Lorebook(name = ""); entryDraft = LoreEntry(title = "") },
+                      modifier = Modifier.fillMaxWidth()
+                  ) { Text("+ NEW LOREBOOK") }
+          
+                  HorizontalDivider()
+                  GreyField("Lorebook Name", bookDraft.name, { bookDraft = bookDraft.copy(name = it) }, singleLine = true)
+                  GreyField("Lorebook Description", bookDraft.description, { bookDraft = bookDraft.copy(description = it) }, minLines = 3)
+                  SwitchRow("Lorebook enabled", "إذا مطفي ما يحقن أي Entry حتى لو Linked", bookDraft.enabled) { bookDraft = bookDraft.copy(enabled = it) }
+                  Button(onClick = { saveBook(bookDraft) }, modifier = Modifier.fillMaxWidth()) { Text("SAVE LOREBOOK") }
+          
+                  HorizontalDivider()
+                  SectionTitle("ENTRIES", "Keys → trigger → content injection")
+                  bookDraft.entries.forEach { entry ->
+                      Surface(color = if (entry.id == entryDraft.id) GreyCard2 else GreyCard, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().clickable { entryDraft = entry }) {
+                          Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+                              Column(Modifier.weight(1f)) {
+                                  Text(entry.title.ifBlank { "Untitled Entry" })
+                                  Text("P${entry.priority} • depth ${entry.scanDepth} • ${if (entry.constant) "Always" else entry.keys.take(60)}", color = SteelDim, fontSize = 10.sp, maxLines = 1)
+                              }
+                              if (!entry.enabled) Text("OFF", color = SteelDim, fontSize = 10.sp)
+                          }
+                      }
+                  }
+                  OutlinedButton(onClick = { entryDraft = LoreEntry(title = "") }, modifier = Modifier.fillMaxWidth()) { Text("+ NEW ENTRY") }
+          
+                  GreyField("Entry Title", entryDraft.title, { entryDraft = entryDraft.copy(title = it) }, singleLine = true)
+                  GreyField("Keys / Keywords", entryDraft.keys, { entryDraft = entryDraft.copy(keys = it) }, minLines = 3, hint = "افصل بفاصلة أو سطر جديد: castle, king, القلعة")
+                  GreyField("Secondary Keys", entryDraft.secondaryKeys, { entryDraft = entryDraft.copy(secondaryKeys = it) }, minLines = 2, hint = "Janitor selective keys / optional")
+                  GreyField("Content", entryDraft.content, { entryDraft = entryDraft.copy(content = it) }, minLines = 8, hint = "يدعم {{char}} و {{user}}")
+                  SwitchRow("Enabled", "تشغيل هذا الـEntry", entryDraft.enabled) { entryDraft = entryDraft.copy(enabled = it) }
+                  SwitchRow("Constant / Always active", "يُحقن دائمًا بدون Keyword", entryDraft.constant) { entryDraft = entryDraft.copy(constant = it) }
+                  SwitchRow("Selective keys", "طبّق منطق Janitor على Primary + Secondary keys", entryDraft.selective) { entryDraft = entryDraft.copy(selective = it) }
+                  if (entryDraft.selective) {
+                      Text("Selective logic", color = SteelDim, fontSize = 11.sp)
+                      SegmentedButtonRow(
+                          listOf("AND ANY", "NOT ALL", "NOT ANY", "AND ALL"),
+                          listOf("AND ANY", "NOT ALL", "NOT ANY", "AND ALL").getOrElse(entryDraft.selectiveLogic) { "AND ANY" }
+                      ) { choice ->
+                          val idx = listOf("AND ANY", "NOT ALL", "NOT ANY", "AND ALL").indexOf(choice).coerceAtLeast(0)
+                          entryDraft = entryDraft.copy(selectiveLogic = idx)
+                      }
+                  }
+                  IntField("Probability %", entryDraft.probability) { entryDraft = entryDraft.copy(probability = it.coerceIn(0, 100)) }
+                  IntField("Priority (higher first)", entryDraft.priority) { entryDraft = entryDraft.copy(priority = it.coerceIn(-999, 999)) }
+                  IntField("Scan depth (messages)", entryDraft.scanDepth) { entryDraft = entryDraft.copy(scanDepth = it.coerceAtLeast(1)) }
+                  SwitchRow("Case sensitive", "مطابقة الحروف الكبيرة/الصغيرة حرفيًا", entryDraft.caseSensitive) { entryDraft = entryDraft.copy(caseSensitive = it) }
+                  SwitchRow("Whole word", "يحاول منع التطابق داخل كلمة أطول", entryDraft.wholeWord) { entryDraft = entryDraft.copy(wholeWord = it) }
+                  Text("Injection position", color = SteelDim, fontSize = 11.sp)
+                  SegmentedButtonRow(listOf("Before Character", "After Character", "Before Chat"), entryDraft.position) { entryDraft = entryDraft.copy(position = it) }
+                  MacroHelpCard()
+          
+                  Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                      OutlinedButton(
+                          onClick = {
+                              if (bookDraft.id.isBlank()) return@OutlinedButton
+                              val entries = bookDraft.entries.filterNot { it.id == entryDraft.id }
+                              bookDraft = bookDraft.copy(entries = entries)
+                              saveBook(bookDraft)
+                              entryDraft = entries.firstOrNull() ?: LoreEntry(title = "")
+                          },
+                          modifier = Modifier.weight(1f),
+                          enabled = bookDraft.entries.any { it.id == entryDraft.id }
+                      ) { Text("DELETE ENTRY") }
+                      Button(
+                          onClick = {
+                              val cleanEntry = entryDraft.copy(title = entryDraft.title.ifBlank { "Lore Entry" })
+                              val exists = bookDraft.entries.any { it.id == cleanEntry.id }
+                              val entries = if (exists) bookDraft.entries.map { if (it.id == cleanEntry.id) cleanEntry else it } else bookDraft.entries + cleanEntry
+                              bookDraft = bookDraft.copy(entries = entries)
+                              saveBook(bookDraft)
+                              entryDraft = cleanEntry
+                          },
+                          modifier = Modifier.weight(1f)
+                      ) { Text("SAVE ENTRY") }
+                  }
+                  Spacer(Modifier.height(24.dp))
+              }
+          }
+          
+          @Composable
+          private fun LibraryRow(
+              title: String,
+              subtitle: String,
+              selected: Boolean,
+              onEdit: () -> Unit,
+              onUse: () -> Unit,
+              onDelete: (() -> Unit)?
+          ) {
+              Surface(color = if (selected) GreyCard2 else GreyCard, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                  Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+                      Column(Modifier.weight(1f).clickable { onEdit() }) {
+                          Text(title.ifBlank { "Untitled" }, fontWeight = FontWeight.SemiBold)
+                          Text(subtitle, color = SteelDim, fontSize = 10.sp, maxLines = 1)
+                      }
+                      TextButton(onClick = onEdit) { Text("Edit") }
+                      TextButton(onClick = onUse) { Text("Use") }
+                      if (onDelete != null) TextButton(onClick = onDelete) { Text("×") }
+                  }
+              }
+          }
+          
+          @Composable
+          private fun MacroHelpCard() {
+              Surface(color = Color(0xFF121619), shape = RoundedCornerShape(13.dp), modifier = Modifier.fillMaxWidth()) {
+                  Text(
+                      "Macros: {{char}} أو {char} = اسم الشخصية • {{user}} أو {user} = اسم الـPersona النشط. تعمل داخل Description / Scenario / Greeting / Example Dialogue / Instructions / Lorebook.",
+                      Modifier.padding(11.dp), color = SteelDim, fontSize = 10.sp
+                  )
+              }
+          }
+          
+          @Composable
+          fun SettingsScreen(
+              modifier: Modifier,
+              settings: AppSettings,
+              onSave: (AppSettings) -> Unit
+          ) {
+              var s by remember(settings) { mutableStateOf(settings) }
+              var keyVisible by remember { mutableStateOf(false) }
+          
+              Column(
+                  modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                  verticalArrangement = Arrangement.spacedBy(12.dp)
+              ) {
+                  SectionTitle("API CONNECTION", "OpenRouter أو أي Proxy/OpenAI-compatible endpoint")
+          
+                  SegmentedButtonRow(
+                      options = listOf("OpenRouter", "Custom"),
+                      selected = s.provider,
+                      onSelected = { s = s.copy(provider = it) }
+                  )
+          
+                  if (s.provider == "Custom") {
+                      GreyField(
+                          "Full Chat Completions URL",
+                          s.customEndpoint,
+                          { s = s.copy(customEndpoint = it) },
+                          singleLine = true,
+                          hint = "مثال: https://proxy.example.com/v1/chat/completions"
+                      )
+                      Text("يدعم HTTPS وHTTP. لا ترسل API Key عبر HTTP غير موثوق.", color = SteelDim, fontSize = 11.sp)
+                  } else {
+                      ReadOnlyInfo("Endpoint", "https://openrouter.ai/api/v1/chat/completions")
+                  }
+          
+                  GreyField("Model ID", s.model, { s = s.copy(model = it) }, singleLine = true)
+          
+                  OutlinedTextField(
+                      value = s.apiKey,
+                      onValueChange = { s = s.copy(apiKey = it) },
+                      label = { Text("API Key") },
+                      modifier = Modifier.fillMaxWidth(),
+                      singleLine = true,
+                      visualTransformation = if (keyVisible) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                      trailingIcon = {
+                          TextButton(onClick = { keyVisible = !keyVisible }) {
+                              Text(if (keyVisible) "Hide" else "Show")
+                          }
+                      }
+                  )
+                  Text("يُحفظ مفتاح API مشفّراً بواسطة Android Keystore.", color = SteelDim, fontSize = 11.sp)
+          
+                  GreyField(
+                      "Extra Headers (اختياري)",
+                      s.extraHeaders,
+                      { s = s.copy(extraHeaders = it) },
+                      minLines = 3,
+                      hint = "Header-Name: value\nHeader-2: value"
+                  )
+          
+                  HorizontalDivider()
+                  SectionTitle("GENERATION", "إعدادات قريبة من JanitorAI مع تحكم أدق")
+          
+                  SliderSetting("Temperature", s.temperature, 0f..2f, 0.01f) { s = s.copy(temperature = it) }
+                  IntField("Max output tokens", s.maxTokens) { s = s.copy(maxTokens = it.coerceAtLeast(1)) }
+                  SliderSetting("Top P", s.topP, 0.01f..1f, 0.01f) { s = s.copy(topP = it) }
+          
+                  ToggleParam("Top K", s.includeTopK, { s = s.copy(includeTopK = it) }) {
+                      IntField("Top K value", s.topK) { s = s.copy(topK = it.coerceAtLeast(0)) }
+                  }
+                  ToggleParam("Min P", s.includeMinP, { s = s.copy(includeMinP = it) }) {
+                      SliderSetting("Min P value", s.minP, 0f..1f, 0.01f) { s = s.copy(minP = it) }
+                  }
+                  ToggleParam("Frequency penalty", s.includeFrequencyPenalty, { s = s.copy(includeFrequencyPenalty = it) }) {
+                      SliderSetting("Frequency", s.frequencyPenalty, -2f..2f, 0.05f) { s = s.copy(frequencyPenalty = it) }
+                  }
+                  ToggleParam("Presence penalty", s.includePresencePenalty, { s = s.copy(includePresencePenalty = it) }) {
+                      SliderSetting("Presence", s.presencePenalty, -2f..2f, 0.05f) { s = s.copy(presencePenalty = it) }
+                  }
+                  ToggleParam("Repetition penalty", s.includeRepetitionPenalty, { s = s.copy(includeRepetitionPenalty = it) }) {
+                      SliderSetting("Repetition", s.repetitionPenalty, 0.5f..2f, 0.01f) { s = s.copy(repetitionPenalty = it) }
+                  }
+                  ToggleParam("Seed", s.includeSeed, { s = s.copy(includeSeed = it) }) {
+                      IntField("Seed value", s.seed) { s = s.copy(seed = it) }
+                  }
+          
+                  GreyField(
+                      "Stop sequences",
+                      s.stopSequences,
+                      { s = s.copy(stopSequences = it) },
+                      minLines = 2,
+                      hint = "كل سطر = stop sequence"
+                  )
+          
+                  SwitchRow("Streaming", "إظهار الرد أثناء التوليد + زر Stop", s.stream) { s = s.copy(stream = it) }
+          
+                  HorizontalDivider()
+                  SectionTitle("REASONING", "لا نرسل أي تعطيل صريح إذا كان هذا القسم غير مفعّل")
+          
+                  SwitchRow("Include reasoning controls", "للموديلات التي تدعم thinking/reasoning", s.includeReasoning) {
+                      s = s.copy(includeReasoning = it)
+                  }
+                  if (s.includeReasoning) {
+                      SegmentedButtonRow(
+                          options = listOf("low", "medium", "high", "max"),
+                          selected = s.reasoningEffort,
+                          onSelected = { s = s.copy(reasoningEffort = it) }
+                      )
+                      IntField("Reasoning max tokens (0 = omit)", s.reasoningMaxTokens) {
+                          s = s.copy(reasoningMaxTokens = it.coerceAtLeast(0))
+                      }
+                      SwitchRow("Exclude reasoning from response", "يفكر الموديل لكن لا يعرض نص التفكير", s.excludeReasoning) {
+                          s = s.copy(excludeReasoning = it)
+                      }
+                  }
+          
+                  HorizontalDivider()
+                  SectionTitle("CONTEXT", "التطبيق لا يفرض سقف 128K")
+          
+                  SegmentedButtonRow(
+                      options = listOf("Full", "Recent"),
+                      selected = s.contextMode,
+                      onSelected = { s = s.copy(contextMode = it) }
+                  )
+                  if (s.contextMode == "Full") {
+                      ReadOnlyInfo("Context policy", "Send all saved messages. Provider/model context window is the only hard limit.")
+                  } else {
+                      IntField("Recent message count", s.recentMessageCount) {
+                          s = s.copy(recentMessageCount = it.coerceAtLeast(2))
+                      }
+                  }
+          
+                  HorizontalDivider()
+                  SectionTitle("LOREBOOK ENGINE", "0 = بدون حد من التطبيق")
+          
+                  IntField("Max triggered entries (0 = unlimited)", s.loreMaxEntries) {
+                      s = s.copy(loreMaxEntries = it.coerceAtLeast(0))
+                  }
+                  IntField("Max injected lore characters (0 = unlimited)", s.loreMaxChars) {
+                      s = s.copy(loreMaxChars = it.coerceAtLeast(0))
+                  }
+                  ReadOnlyInfo("Activation", "كل Entry يفحص آخر Scan Depth من الرسائل، يطابق أي Keyword، ثم يرتب النتائج حسب Priority. Constant يتفعل دائمًا.")
+          
+                  HorizontalDivider()
+                  SectionTitle("ARABIC TRANSLATION", "Google ML Kit • ترجمة على الجهاز")
+          
+                  SwitchRow("Auto translate assistant replies", "يضيف العربية بعد اكتمال كل رد", s.translateReplies) {
+                      s = s.copy(translateReplies = it)
+                  }
+                  SwitchRow("Show original + Arabic", "إذا أطفأته يعرض العربية وحدها عند توفرها", s.showOriginal) {
+                      s = s.copy(showOriginal = it)
+                  }
+                  SwitchRow("Download language models on Wi‑Fi only", "حزم اللغة تُنزّل عند الحاجة", s.translationWifiOnly) {
+                      s = s.copy(translationWifiOnly = it)
+                  }
+                  Surface(color = GreyCard, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                      Text(
+                          "Translations powered by Google ML Kit on-device translation. جودة الترجمة مناسبة للاستخدام العام وقد تختلف حسب النص.",
+                          Modifier.padding(12.dp),
+                          fontSize = 11.sp,
+                          color = SteelDim
+                      )
+                  }
+          
+                  Button(
+                      onClick = { onSave(s) },
+                      modifier = Modifier.fillMaxWidth().height(52.dp)
+                  ) {
+                      Text("SAVE SETTINGS", fontWeight = FontWeight.Bold)
+                  }
+                  Spacer(Modifier.height(18.dp))
+              }
+          }
+          
+          @Composable
+          private fun SectionTitle(title: String, subtitle: String) {
+              Column {
+                  Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Steel)
+                  Text(subtitle, color = SteelDim, fontSize = 11.sp)
+              }
+          }
+          
+          @Composable
+          private fun GreyField(
+              label: String,
+              value: String,
+              onValue: (String) -> Unit,
+              singleLine: Boolean = false,
+              minLines: Int = 1,
+              hint: String = ""
+          ) {
+              OutlinedTextField(
+                  value = value,
+                  onValueChange = onValue,
+                  label = { Text(label) },
+                  placeholder = if (hint.isBlank()) null else ({ Text(hint) }),
+                  modifier = Modifier.fillMaxWidth(),
+                  singleLine = singleLine,
+                  minLines = minLines,
+                  maxLines = if (singleLine) 1 else maxOf(minLines, 10),
+                  shape = RoundedCornerShape(14.dp)
+              )
+          }
+          
+          @Composable
+          private fun IntField(label: String, value: Int, onValue: (Int) -> Unit) {
+              OutlinedTextField(
+                  value = value.toString(),
+                  onValueChange = { raw -> raw.toIntOrNull()?.let(onValue) },
+                  label = { Text(label) },
+                  singleLine = true,
+                  modifier = Modifier.fillMaxWidth(),
+                  shape = RoundedCornerShape(14.dp)
+              )
+          }
+          
+          @Composable
+          private fun SliderSetting(label: String, value: Float, range: ClosedFloatingPointRange<Float>, step: Float, onValue: (Float) -> Unit) {
+              Column {
+                  Row(Modifier.fillMaxWidth()) {
+                      Text(label, Modifier.weight(1f))
+                      Text("%.2f".format(value), color = Steel)
+                  }
+                  val steps = (((range.endInclusive - range.start) / step).toInt() - 1).coerceAtLeast(0)
+                  Slider(value = value, onValueChange = onValue, valueRange = range, steps = steps)
+              }
+          }
+          
+          @Composable
+          private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
+              Surface(color = GreyCard, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                  Row(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                      Column(Modifier.weight(1f)) {
+                          Text(title)
+                          Text(subtitle, color = SteelDim, fontSize = 10.sp)
+                      }
+                      Switch(checked = checked, onCheckedChange = onChecked)
+                  }
+              }
+          }
+          
+          @Composable
+          private fun ToggleParam(title: String, enabled: Boolean, onEnabled: (Boolean) -> Unit, child: @Composable () -> Unit) {
+              Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  SwitchRow(title, if (enabled) "يتم إرسال هذا الباراميتر" else "لن يُرسل للـendpoint", enabled, onEnabled)
+                  if (enabled) child()
+              }
+          }
+          
+          @Composable
+          private fun ReadOnlyInfo(label: String, value: String) {
+              Surface(color = GreyCard, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                  Column(Modifier.padding(12.dp)) {
+                      Text(label, fontSize = 10.sp, color = SteelDim)
+                      Text(value, fontSize = 12.sp)
+                  }
+              }
+          }
+          
+          @Composable
+          private fun SegmentedButtonRow(options: List<String>, selected: String, onSelected: (String) -> Unit) {
+              Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                  options.forEach { option ->
+                      if (option == selected) {
+                          Button(onClick = { onSelected(option) }, modifier = Modifier.weight(1f)) { Text(option) }
+                      } else {
+                          OutlinedButton(onClick = { onSelected(option) }, modifier = Modifier.weight(1f)) { Text(option) }
+                      }
+                  }
+              }
+          }
+          
+          private fun normalizeLibrary(input: LibraryState): LibraryState {
+              val chars = if (input.characters.isEmpty()) listOf(CharacterProfile()) else input.characters
+              val personas = if (input.personas.isEmpty()) listOf(UserPersonaProfile()) else input.personas
+              val activeChar = input.activeCharacterId.takeIf { id -> chars.any { it.id == id } } ?: chars.first().id
+              val activePersona = input.activePersonaId.takeIf { id -> personas.any { it.id == id } } ?: personas.first().id
+              val validBookIds = input.activeLorebookIds.filter { id -> input.lorebooks.any { it.id == id } }.distinct()
+              return input.copy(characters = chars, personas = personas, activeCharacterId = activeChar, activePersonaId = activePersona, activeLorebookIds = validBookIds)
+          }
+          
+          private fun applyMacros(text: String, character: CharacterProfile, persona: UserPersonaProfile): String {
+              if (text.isBlank()) return text
+              val charName = character.name.ifBlank { "Character" }
+              val userName = persona.userName.ifBlank { "User" }
+              return text
+                  .replace("{{char}}", charName, ignoreCase = true)
+                  .replace("{char}", charName, ignoreCase = true)
+                  .replace("{{user}}", userName, ignoreCase = true)
+                  .replace("{user}", userName, ignoreCase = true)
+          }
+          
+          private fun resolveLore(
+              settings: AppSettings,
+              library: LibraryState,
+              messages: List<ChatMessage>,
+              character: CharacterProfile,
+              persona: UserPersonaProfile
+          ): List<LoreEntry> {
+              val activeBooks = library.lorebooks.filter { it.enabled && library.activeLorebookIds.contains(it.id) }
+              val activated = mutableListOf<LoreEntry>()
+          
+              for (book in activeBooks) {
+                  for (entry in book.entries) {
+                      if (!entry.enabled || entry.content.isBlank()) continue
+                      val triggered = entry.constant || matchesLoreEntry(entry, messages, character, persona)
+                      val probabilityPassed = entry.probability >= 100 || (entry.probability > 0 && kotlin.random.Random.nextInt(100) < entry.probability)
+                      if (triggered && probabilityPassed) activated += entry.copy(content = applyMacros(entry.content, character, persona))
+                  }
+              }
+          
+              var result = activated.sortedByDescending { it.priority }
+              if (settings.loreMaxEntries > 0) result = result.take(settings.loreMaxEntries)
+              if (settings.loreMaxChars > 0) {
+                  var used = 0
+                  result = result.mapNotNull { entry ->
+                      if (used >= settings.loreMaxChars) null
+                      else {
+                          val remaining = settings.loreMaxChars - used
+                          val clipped = if (entry.content.length > remaining) entry.content.take(remaining) else entry.content
+                          used += clipped.length
+                          if (clipped.isBlank()) null else entry.copy(content = clipped)
+                      }
+                  }
+              }
+              return result
+          }
+          
+          private fun matchesLoreEntry(
+              entry: LoreEntry,
+              messages: List<ChatMessage>,
+              character: CharacterProfile,
+              persona: UserPersonaProfile
+          ): Boolean {
+              val primaryKeys = applyMacros(entry.keys, character, persona)
+                  .split(',', '\n')
+                  .map { it.trim() }
+                  .filter { it.isNotBlank() }
+              if (primaryKeys.isEmpty()) return false
+          
+              val haystack = messages.takeLast(entry.scanDepth.coerceAtLeast(1)).joinToString("\n") { it.content }
+              if (haystack.isBlank()) return false
+          
+              fun keyMatches(key: String): Boolean {
+                  if (key == "*") return true
+                  if (!entry.wholeWord) return haystack.contains(key, ignoreCase = !entry.caseSensitive)
+                  val flags = if (entry.caseSensitive) emptySet() else setOf(RegexOption.IGNORE_CASE)
+                  val escaped = Regex.escape(key)
+                  return Regex("(?<![\\p{L}\\p{N}_])$escaped(?![\\p{L}\\p{N}_])", flags).containsMatchIn(haystack)
+              }
+          
+              val primaryMatched = primaryKeys.any(::keyMatches)
+              if (!primaryMatched) return false
+              if (!entry.selective) return true
+          
+              val secondary = applyMacros(entry.secondaryKeys, character, persona)
+                  .split(',', '\n')
+                  .map { it.trim() }
+                  .filter { it.isNotBlank() }
+              if (secondary.isEmpty()) return primaryMatched
+              val matches = secondary.map(::keyMatches)
+              return when (entry.selectiveLogic.coerceIn(0, 3)) {
+                  0 -> matches.any()          // AND ANY
+                  1 -> !matches.all()         // NOT ALL
+                  2 -> matches.none()         // NOT ANY
+                  3 -> matches.all()          // AND ALL
+                  else -> matches.any()
+              }
+          }
+          
+          class RpApiClient {
+              private val client = OkHttpClient.Builder().build()
+          
+              fun chat(
+                  s: AppSettings,
+                  messages: List<ChatMessage>,
+                  onDelta: (String) -> Unit,
+                  onComplete: () -> Unit,
+                  onError: (String) -> Unit
+              ): Call {
+                  val url = if (s.provider == "OpenRouter") {
+                      "https://openrouter.ai/api/v1/chat/completions"
+                  } else {
+                      s.customEndpoint.trim()
+                  }
+          
+                  if (url.isBlank()) {
+                      onError("Custom endpoint فارغ")
+                      return client.newCall(Request.Builder().url("https://example.invalid").build())
+                  }
+          
+                  val body = JSONObject().apply {
+                      put("model", s.model)
+                      put("stream", s.stream)
+                      put("temperature", s.temperature.toDouble())
+                      put("max_tokens", s.maxTokens)
+                      put("top_p", s.topP.toDouble())
+          
+                      if (s.includeTopK) put("top_k", s.topK)
+                      if (s.includeMinP) put("min_p", s.minP.toDouble())
+                      if (s.includeFrequencyPenalty) put("frequency_penalty", s.frequencyPenalty.toDouble())
+                      if (s.includePresencePenalty) put("presence_penalty", s.presencePenalty.toDouble())
+                      if (s.includeRepetitionPenalty) put("repetition_penalty", s.repetitionPenalty.toDouble())
+                      if (s.includeSeed) put("seed", s.seed)
+          
+                      val stops = s.stopSequences.lines().map { it.trim() }.filter { it.isNotBlank() }
+                      if (stops.isNotEmpty()) put("stop", JSONArray(stops))
+          
+                      if (s.includeReasoning) {
+                          put("reasoning", JSONObject().apply {
+                              put("effort", s.reasoningEffort)
+                              if (s.reasoningMaxTokens > 0) put("max_tokens", s.reasoningMaxTokens)
+                              put("exclude", s.excludeReasoning)
+                          })
+                      }
+          
+                      put("messages", JSONArray().apply {
+                          messages.forEach { m ->
+                              put(JSONObject().apply {
+                                  put("role", m.role)
+                                  put("content", m.content)
+                              })
+                          }
+                      })
+                  }
+          
+                  val requestBody = body.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+                  val builder = Request.Builder()
+                      .url(url)
+                      .post(requestBody)
+                      .header("Content-Type", "application/json")
+          
+                  if (s.apiKey.isNotBlank()) builder.header("Authorization", "Bearer ${s.apiKey.trim()}")
+                  if (s.provider == "OpenRouter") builder.header("X-Title", "GreyRP Android")
+          
+                  s.extraHeaders.lines().forEach { line ->
+                      val idx = line.indexOf(':')
+                      if (idx > 0) {
+                          val key = line.substring(0, idx).trim()
+                          val value = line.substring(idx + 1).trim()
+                          if (key.isNotBlank() && value.isNotBlank() && !key.equals("Authorization", true)) {
+                              builder.header(key, value)
+                          }
+                      }
+                  }
+          
+                  val call = client.newCall(builder.build())
+                  call.enqueue(object : Callback {
+                      override fun onFailure(call: Call, e: IOException) {
+                          if (call.isCanceled()) return
+                          onError(e.message ?: "Network error")
+                      }
+          
+                      override fun onResponse(call: Call, response: Response) {
+                          response.use { res ->
+                              if (!res.isSuccessful) {
+                                  val text = res.body?.string().orEmpty()
+                                  onError("HTTP ${res.code}: ${text.take(1200)}")
+                                  return
+                              }
+          
+                              val responseBody = res.body ?: run {
+                                  onError("Empty response")
+                                  return
+                              }
+          
+                              if (!s.stream) {
+                                  try {
+                                      val root = JSONObject(responseBody.string())
+                                      val choice = root.getJSONArray("choices").getJSONObject(0)
+                                      val message = choice.getJSONObject("message")
+                                      val content = readContent(message.opt("content"))
+                                      if (content.isNotBlank()) onDelta(content)
+                                      onComplete()
+                                  } catch (e: Exception) {
+                                      onError("Parse error: ${e.message}")
+                                  }
+                                  return
+                              }
+          
+                              try {
+                                  val source = responseBody.source()
+                                  while (!source.exhausted()) {
+                                      val line = source.readUtf8Line() ?: continue
+                                      if (!line.startsWith("data:")) continue
+                                      val data = line.removePrefix("data:").trim()
+                                      if (data == "[DONE]") break
+                                      if (data.isBlank()) continue
+                                      val root = JSONObject(data)
+                                      val choices = root.optJSONArray("choices") ?: continue
+                                      if (choices.length() == 0) continue
+                                      val delta = choices.getJSONObject(0).optJSONObject("delta") ?: continue
+                                      val text = readContent(delta.opt("content"))
+                                      if (text.isNotEmpty()) onDelta(text)
+                                  }
+                                  onComplete()
+                              } catch (e: Exception) {
+                                  if (!call.isCanceled()) onError("Stream error: ${e.message}")
+                              }
+                          }
+                      }
+                  })
+                  return call
+              }
+          
+              private fun readContent(value: Any?): String {
+                  return when (value) {
+                      is String -> value
+                      is JSONArray -> buildString {
+                          for (i in 0 until value.length()) {
+                              val item = value.optJSONObject(i) ?: continue
+                              if (item.optString("type") == "text") append(item.optString("text"))
+                          }
+                      }
+                      else -> ""
+                  }
+              }
+          }
+          
+          object GoogleTranslator {
+              fun translateToArabic(
+                  context: Context,
+                  text: String,
+                  wifiOnly: Boolean,
+                  onSuccess: (String) -> Unit,
+                  onError: (String) -> Unit
+              ) {
+                  if (text.isBlank()) {
+                      onSuccess("")
+                      return
+                  }
+          
+                  val identifier = LanguageIdentification.getClient()
+                  identifier.identifyLanguage(text)
+                      .addOnSuccessListener { code ->
+                          val srcTag = if (code == "und") "en" else code
+                          if (srcTag == "ar") {
+                              onSuccess(text)
+                              identifier.close()
+                              return@addOnSuccessListener
+                          }
+          
+                          val sourceLanguage = TranslateLanguage.fromLanguageTag(srcTag) ?: TranslateLanguage.ENGLISH
+                          val options = TranslatorOptions.Builder()
+                              .setSourceLanguage(sourceLanguage)
+                              .setTargetLanguage(TranslateLanguage.ARABIC)
+                              .build()
+                          val translator = Translation.getClient(options)
+          
+                          val conditionsBuilder = DownloadConditions.Builder()
+                          if (wifiOnly) conditionsBuilder.requireWifi()
+          
+                          translator.downloadModelIfNeeded(conditionsBuilder.build())
+                              .addOnSuccessListener {
+                                  translator.translate(text)
+                                      .addOnSuccessListener { translated ->
+                                          onSuccess(translated)
+                                          translator.close()
+                                          identifier.close()
+                                      }
+                                      .addOnFailureListener { e ->
+                                          onError(e.message ?: "Translation failed")
+                                          translator.close()
+                                          identifier.close()
+                                      }
+                              }
+                              .addOnFailureListener { e ->
+                                  onError(e.message ?: "Model download failed")
+                                  translator.close()
+                                  identifier.close()
+                              }
+                      }
+                      .addOnFailureListener { e ->
+                          identifier.close()
+                          onError(e.message ?: "Language detection failed")
+                      }
+              }
+          }
+          
+          object SettingsStore {
+              private const val PREF = "greyrp_settings"
+              private const val KEY_JSON = "settings_json"
+              private const val KEY_MESSAGES = "messages_json"
+          
+              fun save(context: Context, s: AppSettings) {
+                  val j = JSONObject().apply {
+                      put("provider", s.provider)
+                      put("customEndpoint", s.customEndpoint)
+                      put("model", s.model)
+                      put("extraHeaders", s.extraHeaders)
+                      put("temperature", s.temperature.toDouble())
+                      put("maxTokens", s.maxTokens)
+                      put("topP", s.topP.toDouble())
+                      put("includeTopK", s.includeTopK)
+                      put("topK", s.topK)
+                      put("includeMinP", s.includeMinP)
+                      put("minP", s.minP.toDouble())
+                      put("includeFrequencyPenalty", s.includeFrequencyPenalty)
+                      put("frequencyPenalty", s.frequencyPenalty.toDouble())
+                      put("includePresencePenalty", s.includePresencePenalty)
+                      put("presencePenalty", s.presencePenalty.toDouble())
+                      put("includeRepetitionPenalty", s.includeRepetitionPenalty)
+                      put("repetitionPenalty", s.repetitionPenalty.toDouble())
+                      put("includeSeed", s.includeSeed)
+                      put("seed", s.seed)
+                      put("stopSequences", s.stopSequences)
+                      put("stream", s.stream)
+                      put("includeReasoning", s.includeReasoning)
+                      put("reasoningEffort", s.reasoningEffort)
+                      put("reasoningMaxTokens", s.reasoningMaxTokens)
+                      put("excludeReasoning", s.excludeReasoning)
+                      put("translateReplies", s.translateReplies)
+                      put("translationWifiOnly", s.translationWifiOnly)
+                      put("showOriginal", s.showOriginal)
+                      put("contextMode", s.contextMode)
+                      put("recentMessageCount", s.recentMessageCount)
+                      put("systemPrompt", s.systemPrompt)
+                      put("loreMaxEntries", s.loreMaxEntries)
+                      put("loreMaxChars", s.loreMaxChars)
+                  }
+                  context.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString(KEY_JSON, j.toString()).apply()
+                  CryptoStore.put(context, "api_key", s.apiKey)
+              }
+          
+              fun load(context: Context): AppSettings {
+                  val raw = context.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString(KEY_JSON, null)
+                  val key = CryptoStore.get(context, "api_key")
+                  if (raw.isNullOrBlank()) return AppSettings(apiKey = key)
+                  return try {
+                      val j = JSONObject(raw)
+                      AppSettings(
+                          provider = j.optString("provider", "OpenRouter"),
+                          customEndpoint = j.optString("customEndpoint", ""),
+                          model = j.optString("model", "z-ai/glm-5.3-flash"),
+                          apiKey = key,
+                          extraHeaders = j.optString("extraHeaders", ""),
+                          temperature = j.optDouble("temperature", 0.9).toFloat(),
+                          maxTokens = j.optInt("maxTokens", 8192),
+                          topP = j.optDouble("topP", 0.95).toFloat(),
+                          includeTopK = j.optBoolean("includeTopK", true),
+                          topK = j.optInt("topK", 40),
+                          includeMinP = j.optBoolean("includeMinP", false),
+                          minP = j.optDouble("minP", 0.05).toFloat(),
+                          includeFrequencyPenalty = j.optBoolean("includeFrequencyPenalty", false),
+                          frequencyPenalty = j.optDouble("frequencyPenalty", 0.0).toFloat(),
+                          includePresencePenalty = j.optBoolean("includePresencePenalty", false),
+                          presencePenalty = j.optDouble("presencePenalty", 0.0).toFloat(),
+                          includeRepetitionPenalty = j.optBoolean("includeRepetitionPenalty", false),
+                          repetitionPenalty = j.optDouble("repetitionPenalty", 1.0).toFloat(),
+                          includeSeed = j.optBoolean("includeSeed", false),
+                          seed = j.optInt("seed", 1),
+                          stopSequences = j.optString("stopSequences", ""),
+                          stream = j.optBoolean("stream", true),
+                          includeReasoning = j.optBoolean("includeReasoning", false),
+                          reasoningEffort = j.optString("reasoningEffort", "low"),
+                          reasoningMaxTokens = j.optInt("reasoningMaxTokens", 0),
+                          excludeReasoning = j.optBoolean("excludeReasoning", true),
+                          translateReplies = j.optBoolean("translateReplies", true),
+                          translationWifiOnly = j.optBoolean("translationWifiOnly", false),
+                          showOriginal = j.optBoolean("showOriginal", true),
+                          contextMode = j.optString("contextMode", "Full"),
+                          recentMessageCount = j.optInt("recentMessageCount", 80),
+                          systemPrompt = j.optString("systemPrompt", AppSettings().systemPrompt),
+                          loreMaxEntries = j.optInt("loreMaxEntries", 0),
+                          loreMaxChars = j.optInt("loreMaxChars", 0)
+                      )
+                  } catch (_: Exception) {
+                      AppSettings(apiKey = key)
+                  }
+              }
+          
+              fun saveMessages(context: Context, list: List<ChatMessage>) {
+                  val arr = JSONArray()
+                  list.filter { it.id != "__streaming__" }.forEach { m ->
+                      arr.put(JSONObject().apply {
+                          put("id", m.id); put("role", m.role); put("content", m.content)
+                          if (m.translated != null) put("translated", m.translated)
+                      })
+                  }
+                  context.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString(KEY_MESSAGES, arr.toString()).apply()
+              }
+          
+              fun loadMessages(context: Context): List<ChatMessage> {
+                  val raw = context.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString(KEY_MESSAGES, null) ?: return emptyList()
+                  return try {
+                      val arr = JSONArray(raw)
+                      buildList {
+                          for (i in 0 until arr.length()) {
+                              val j = arr.getJSONObject(i)
+                              add(ChatMessage(
+                                  id = j.optString("id", UUID.randomUUID().toString()),
+                                  role = j.optString("role", "user"),
+                                  content = j.optString("content", ""),
+                                  translated = if (j.has("translated")) j.optString("translated") else null
+                              ))
+                          }
+                      }
+                  } catch (_: Exception) { emptyList() }
+              }
+          }
+          
+          object LorebookJsonCodec {
+              data class ImportResult(val lorebook: Lorebook, val format: String)
+          
+              fun importAny(raw: String, fallbackFileName: String): ImportResult {
+                  val text = raw.trim().removePrefix("\uFEFF").trim()
+                  require(text.isNotBlank()) { "Empty JSON file" }
+          
+                  val fallbackName = cleanImportedName(fallbackFileName)
+                  if (text.startsWith("[")) {
+                      val array = JSONArray(text)
+                      val entries = parseEntryArray(array, 8)
+                      require(entries.isNotEmpty()) { "No lore entries found" }
+                      return ImportResult(
+                          Lorebook(name = fallbackName, description = "Imported from JanitorAI JSON", entries = entries),
+                          "JanitorAI entry array"
+                      )
+                  }
+          
+                  require(text.startsWith("{")) { "File must contain a JSON array or object" }
+                  val root = JSONObject(text)
+          
+                  root.optJSONObject("originalData")?.let { original ->
+                      val defaultDepth = firstInt(original, "scan_depth", "scanDepth", "depth") ?: 8
+                      val entries = entriesFromAny(original.opt("entries"), defaultDepth)
+                      if (entries.isNotEmpty()) {
+                          return ImportResult(
+                              Lorebook(
+                                  name = original.optString("name", fallbackName).ifBlank { fallbackName },
+                                  description = original.optString("description", ""),
+                                  entries = entries
+                              ),
+                              "JanitorAI/SillyTavern converted JSON"
+                          )
+                      }
+                  }
+          
+                  val characterBook = root.optJSONObject("data")?.optJSONObject("character_book")
+                      ?: root.optJSONObject("character_book")
+                  if (characterBook != null) {
+                      val defaultDepth = firstInt(characterBook, "scan_depth", "scanDepth", "depth") ?: 8
+                      val entries = entriesFromAny(characterBook.opt("entries"), defaultDepth)
+                      if (entries.isNotEmpty()) {
+                          return ImportResult(
+                              Lorebook(
+                                  name = characterBook.optString("name", fallbackName).ifBlank { fallbackName },
+                                  description = characterBook.optString("description", ""),
+                                  entries = entries
+                              ),
+                              "Character Book JSON"
+                          )
+                      }
+                  }
+          
+                  val defaultDepth = firstInt(root, "scan_depth", "scanDepth", "depth") ?: 8
+                  val entries = entriesFromAny(root.opt("entries"), defaultDepth)
+                  if (entries.isNotEmpty()) {
+                      val format = when (root.opt("entries")) {
+                          is JSONObject -> "SillyTavern-style lorebook"
+                          is JSONArray -> "Object lorebook / JanitorAI"
+                          else -> "Lorebook JSON"
+                      }
+                      return ImportResult(
+                          Lorebook(
+                              name = root.optString("name", fallbackName).ifBlank { fallbackName },
+                              description = root.optString("description", ""),
+                              enabled = !root.optBoolean("disabled", false),
+                              entries = entries
+                          ),
+                          format
+                      )
+                  }
+          
+                  // Some Janitor exports wrap the raw array under a generic data/lorebook key.
+                  val wrapped = root.optJSONArray("data") ?: root.optJSONArray("lorebook") ?: root.optJSONArray("world_info")
+                  if (wrapped != null) {
+                      val parsed = parseEntryArray(wrapped, defaultDepth)
+                      if (parsed.isNotEmpty()) {
+                          return ImportResult(
+                              Lorebook(name = root.optString("name", fallbackName).ifBlank { fallbackName }, entries = parsed),
+                              "Wrapped JanitorAI JSON"
+                          )
+                      }
+                  }
+          
+                  throw IllegalArgumentException("No compatible lorebook entries were found")
+              }
+          
+              fun exportJanitor(book: Lorebook): String {
+                  val array = JSONArray()
+                  book.entries.forEachIndexed { index, entry ->
+                      array.put(JSONObject().apply {
+                          put("name", entry.title)
+                          put("key", JSONArray(splitKeys(entry.keys)))
+                          put("keysecondary", JSONArray(splitKeys(entry.secondaryKeys)))
+                          put("content", entry.content)
+                          put("enabled", entry.enabled)
+                          put("insertion_order", entry.priority)
+                          put("case_sensitive", entry.caseSensitive)
+                          put("priority", entry.priority)
+                          put("id", index + 1)
+                          put("comment", entry.title)
+                          put("selective", entry.selective)
+                          put("selectiveLogic", entry.selectiveLogic)
+                          put("probability", entry.probability)
+                          put("constant", entry.constant)
+                          put("position", when (entry.position) {
+                              "Before Character" -> "before_char"
+                              "Before Chat" -> "before_chat"
+                              else -> "after_char"
+                          })
+                          put("extensions", JSONObject().apply {
+                              put("depth", entry.scanDepth)
+                              put("probability", entry.probability)
+                              put("useProbability", entry.probability < 100)
+                              put("selectiveLogic", entry.selectiveLogic)
+                              put("matchWholeWords", entry.wholeWord)
+                              put("caseSensitive", entry.caseSensitive)
+                          })
+                      })
+                  }
+                  return array.toString(2)
+              }
+          
+              fun safeFileName(name: String): String = name
+                  .trim()
+                  .ifBlank { "greyrp-lorebook" }
+                  .replace(Regex("[^A-Za-z0-9._ -]+"), "_")
+                  .replace(Regex("\\s+"), "-")
+                  .take(80)
+          
+              private fun cleanImportedName(fileName: String): String {
+                  val base = fileName.substringAfterLast('/').substringAfterLast(':')
+                      .removeSuffix(".janitor.json").removeSuffix(".lorebook.json").removeSuffix(".json")
+                      .trim()
+                  return base.ifBlank { "Imported Lorebook" }
+              }
+          
+              private fun entriesFromAny(value: Any?, defaultDepth: Int): List<LoreEntry> = when (value) {
+                  is JSONArray -> parseEntryArray(value, defaultDepth)
+                  is JSONObject -> {
+                      val keys = value.keys().asSequence().toList().sortedWith(compareBy<String> { it.toIntOrNull() ?: Int.MAX_VALUE }.thenBy { it })
+                      keys.mapNotNull { key -> value.optJSONObject(key)?.let { parseEntry(it, defaultDepth) } }
+                  }
+                  else -> emptyList()
+              }
+          
+              private fun parseEntryArray(array: JSONArray, defaultDepth: Int): List<LoreEntry> {
+                  val result = mutableListOf<LoreEntry>()
+                  for (i in 0 until array.length()) {
+                      val obj = array.optJSONObject(i) ?: continue
+                      result += parseEntry(obj, defaultDepth)
+                  }
+                  return result
+              }
+          
+              private fun parseEntry(j: JSONObject, defaultDepth: Int): LoreEntry {
+                  val extensions = j.optJSONObject("extensions")
+                  val primaryKeys = firstStringList(j, "key", "keys", "keywords")
+                  val secondaryKeys = firstStringList(j, "keysecondary", "secondary_keys", "secondaryKeys")
+                  val cleanPrimaryKeys = primaryKeys.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+                  val cleanSecondaryKeys = secondaryKeys.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+          
+                  val title = firstNonBlankString(j, "name", "comment", "title", "memo") ?: "Lore Entry"
+                  val enabled = when {
+                      j.has("enabled") -> j.optBoolean("enabled", true)
+                      j.has("disable") -> !j.optBoolean("disable", false)
+                      else -> true
+                  }
+                  val priority = firstInt(j, "priority", "insertion_order", "insertionOrder", "order") ?: 50
+                  val scanDepth = firstInt(j, "scan_depth", "scanDepth", "depth")
+                      ?: extensions?.let { firstInt(it, "depth", "scanDepth", "scan_depth") }
+                      ?: defaultDepth
+                  val caseSensitive = firstBoolean(j, "case_sensitive", "caseSensitive")
+                      ?: extensions?.let { firstBoolean(it, "caseSensitive", "case_sensitive") }
+                      ?: false
+                  val wholeWord = firstBoolean(j, "whole_word", "wholeWord", "matchWholeWords")
+                      ?: extensions?.let { firstBoolean(it, "matchWholeWords", "wholeWord") }
+                      ?: false
+                  val selective = firstBoolean(j, "selective") ?: false
+                  val selectiveLogic = (firstInt(j, "selectiveLogic", "selective_logic")
+                      ?: extensions?.let { firstInt(it, "selectiveLogic", "selective_logic") }
+                      ?: 0).coerceIn(0, 3)
+                  val useProbability = firstBoolean(j, "useProbability")
+                      ?: extensions?.let { firstBoolean(it, "useProbability") }
+                      ?: true
+                  val probabilityRaw = firstInt(j, "probability")
+                      ?: extensions?.let { firstInt(it, "probability") }
+                      ?: 100
+                  val probability = if (useProbability) probabilityRaw.coerceIn(0, 100) else 100
+          
+                  return LoreEntry(
+                      title = title,
+                      keys = cleanPrimaryKeys.joinToString(", "),
+                      secondaryKeys = cleanSecondaryKeys.joinToString(", "),
+                      content = j.optString("content", j.optString("entry", "")),
+                      enabled = enabled,
+                      constant = j.optBoolean("constant", false),
+                      selective = selective,
+                      selectiveLogic = selectiveLogic,
+                      probability = probability,
+                      priority = priority.coerceIn(-999, 999),
+                      scanDepth = scanDepth.coerceAtLeast(1),
+                      caseSensitive = caseSensitive,
+                      wholeWord = wholeWord,
+                      position = mapPosition(j.opt("position"))
+                  )
+              }
+          
+              private fun mapPosition(value: Any?): String {
+                  if (value is Number) {
+                      return when (value.toInt()) {
+                          0 -> "Before Character"
+                          1 -> "After Character"
+                          else -> "Before Chat"
+                      }
+                  }
+                  val raw = value?.toString()?.trim()?.lowercase().orEmpty()
+                  return when (raw) {
+                      "before", "before_char", "before character", "before_character", "0" -> "Before Character"
+                      "before_chat", "before chat", "at_depth", "atdepth", "2", "3", "4", "5", "6", "7" -> "Before Chat"
+                      "after", "after_char", "after character", "after_character", "1" -> "After Character"
+                      else -> "After Character"
+                  }
+              }
+          
+              private fun splitKeys(text: String): List<String> = text
+                  .split(',', '\n')
+                  .map { it.trim() }
+                  .filter { it.isNotBlank() }
+                  .distinct()
+          
+              private fun firstStringList(j: JSONObject, vararg keys: String): List<String> {
+                  keys.forEach { key ->
+                      if (!j.has(key)) return@forEach
+                      val value = j.opt(key)
+                      when (value) {
+                          is JSONArray -> {
+                              val out = mutableListOf<String>()
+                              for (i in 0 until value.length()) value.optString(i).trim().takeIf { it.isNotBlank() }?.let(out::add)
+                              if (out.isNotEmpty()) return out
+                          }
+                          is String -> {
+                              val out = value.split(',', '\n').map { it.trim() }.filter { it.isNotBlank() }
+                              if (out.isNotEmpty()) return out
+                          }
+                      }
+                  }
+                  return emptyList()
+              }
+          
+              private fun firstNonBlankString(j: JSONObject, vararg keys: String): String? {
+                  for (key in keys) {
+                      val value = j.optString(key, "").trim()
+                      if (value.isNotBlank()) return value
+                  }
+                  return null
+              }
+          
+              private fun firstInt(j: JSONObject, vararg keys: String): Int? {
+                  for (key in keys) {
+                      if (!j.has(key)) continue
+                      val value = j.opt(key)
+                      val parsed = when (value) {
+                          is Number -> value.toInt()
+                          is String -> value.trim().toDoubleOrNull()?.toInt()
+                          else -> null
+                      }
+                      if (parsed != null) return parsed
+                  }
+                  return null
+              }
+          
+              private fun firstBoolean(j: JSONObject, vararg keys: String): Boolean? {
+                  for (key in keys) {
+                      if (!j.has(key)) continue
+                      val value = j.opt(key)
+                      return when (value) {
+                          is Boolean -> value
+                          is Number -> value.toInt() != 0
+                          is String -> when (value.trim().lowercase()) {
+                              "true", "1", "yes", "on" -> true
+                              "false", "0", "no", "off" -> false
+                              else -> null
+                          }
+                          else -> null
+                      }
+                  }
+                  return null
+              }
+          }
+          
+          object LibraryStore {
+              private const val PREF = "greyrp_library"
+              private const val KEY = "library_v11"
+          
+              fun save(context: Context, rawState: LibraryState) {
+                  val state = normalizeLibrary(rawState)
+                  val root = JSONObject().apply {
+                      put("activeCharacterId", state.activeCharacterId)
+                      put("activePersonaId", state.activePersonaId)
+                      put("activeLorebookIds", JSONArray(state.activeLorebookIds))
+                      put("characters", JSONArray().apply { state.characters.forEach { put(characterToJson(it)) } })
+                      put("personas", JSONArray().apply { state.personas.forEach { put(personaToJson(it)) } })
+                      put("lorebooks", JSONArray().apply { state.lorebooks.forEach { put(lorebookToJson(it)) } })
+                  }
+                  context.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString(KEY, root.toString()).apply()
+              }
+          
+              fun load(context: Context): LibraryState {
+                  val raw = context.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString(KEY, null)
+                  if (raw.isNullOrBlank()) return migrateLegacy(context)
+                  return try {
+                      val root = JSONObject(raw)
+                      val chars = mutableListOf<CharacterProfile>()
+                      val personas = mutableListOf<UserPersonaProfile>()
+                      val books = mutableListOf<Lorebook>()
+                      root.optJSONArray("characters")?.let { arr -> for (i in 0 until arr.length()) chars += jsonToCharacter(arr.getJSONObject(i)) }
+                      root.optJSONArray("personas")?.let { arr -> for (i in 0 until arr.length()) personas += jsonToPersona(arr.getJSONObject(i)) }
+                      root.optJSONArray("lorebooks")?.let { arr -> for (i in 0 until arr.length()) books += jsonToLorebook(arr.getJSONObject(i)) }
+                      val activeBooks = mutableListOf<String>()
+                      root.optJSONArray("activeLorebookIds")?.let { arr -> for (i in 0 until arr.length()) activeBooks += arr.optString(i) }
+                      normalizeLibrary(LibraryState(
+                          characters = chars,
+                          personas = personas,
+                          lorebooks = books,
+                          activeCharacterId = root.optString("activeCharacterId", ""),
+                          activePersonaId = root.optString("activePersonaId", ""),
+                          activeLorebookIds = activeBooks
+                      ))
+                  } catch (_: Exception) { migrateLegacy(context) }
+              }
+          
+              private fun migrateLegacy(context: Context): LibraryState {
+                  val raw = context.getSharedPreferences("greyrp_settings", Context.MODE_PRIVATE).getString("settings_json", null)
+                  val legacy = try { if (raw.isNullOrBlank()) null else JSONObject(raw) } catch (_: Exception) { null }
+                  val char = CharacterProfile(
+                      name = legacy?.optString("characterName", "Character").orEmpty().ifBlank { "Character" },
+                      description = legacy?.optString("characterPrompt", "").orEmpty(),
+                      scenario = legacy?.optString("scenario", "").orEmpty(),
+                      firstGreeting = legacy?.optString("firstMessage", "").orEmpty()
+                  )
+                  val personaText = legacy?.optString("userPersona", "").orEmpty()
+                  val persona = UserPersonaProfile(description = personaText)
+                  val state = normalizeLibrary(LibraryState(
+                      characters = listOf(char), personas = listOf(persona),
+                      activeCharacterId = char.id, activePersonaId = persona.id
+                  ))
+                  save(context, state)
+                  return state
+              }
+          
+              private fun characterToJson(c: CharacterProfile) = JSONObject().apply {
+                  put("id", c.id); put("name", c.name); put("chatName", c.chatName); put("avatarUri", c.avatarUri)
+                  put("description", c.description); put("scenario", c.scenario); put("firstGreeting", c.firstGreeting)
+                  put("exampleDialogue", c.exampleDialogue); put("extraInstructions", c.extraInstructions)
+              }
+              private fun jsonToCharacter(j: JSONObject) = CharacterProfile(
+                  id = j.optString("id", UUID.randomUUID().toString()), name = j.optString("name", "Character"),
+                  chatName = j.optString("chatName", ""), avatarUri = j.optString("avatarUri", ""),
+                  description = j.optString("description", ""), scenario = j.optString("scenario", ""),
+                  firstGreeting = j.optString("firstGreeting", ""), exampleDialogue = j.optString("exampleDialogue", ""),
+                  extraInstructions = j.optString("extraInstructions", "")
+              )
+              private fun personaToJson(p: UserPersonaProfile) = JSONObject().apply {
+                  put("id", p.id); put("profileName", p.profileName); put("userName", p.userName); put("description", p.description)
+              }
+              private fun jsonToPersona(j: JSONObject) = UserPersonaProfile(
+                  id = j.optString("id", UUID.randomUUID().toString()), profileName = j.optString("profileName", "Persona"),
+                  userName = j.optString("userName", "User"), description = j.optString("description", "")
+              )
+              private fun lorebookToJson(b: Lorebook) = JSONObject().apply {
+                  put("id", b.id); put("name", b.name); put("description", b.description); put("enabled", b.enabled)
+                  put("entries", JSONArray().apply { b.entries.forEach { put(entryToJson(it)) } })
+              }
+              private fun jsonToLorebook(j: JSONObject): Lorebook {
+                  val entries = mutableListOf<LoreEntry>()
+                  j.optJSONArray("entries")?.let { arr -> for (i in 0 until arr.length()) entries += jsonToEntry(arr.getJSONObject(i)) }
+                  return Lorebook(
+                      id = j.optString("id", UUID.randomUUID().toString()), name = j.optString("name", "Lorebook"),
+                      description = j.optString("description", ""), enabled = j.optBoolean("enabled", true), entries = entries
+                  )
+              }
+              private fun entryToJson(e: LoreEntry) = JSONObject().apply {
+                  put("id", e.id); put("title", e.title); put("keys", e.keys); put("secondaryKeys", e.secondaryKeys); put("content", e.content); put("enabled", e.enabled)
+                  put("constant", e.constant); put("selective", e.selective); put("selectiveLogic", e.selectiveLogic); put("probability", e.probability)
+                  put("priority", e.priority); put("scanDepth", e.scanDepth); put("caseSensitive", e.caseSensitive)
+                  put("wholeWord", e.wholeWord); put("position", e.position)
+              }
+              private fun jsonToEntry(j: JSONObject) = LoreEntry(
+                  id = j.optString("id", UUID.randomUUID().toString()), title = j.optString("title", "Lore Entry"),
+                  keys = j.optString("keys", ""), secondaryKeys = j.optString("secondaryKeys", ""), content = j.optString("content", ""), enabled = j.optBoolean("enabled", true),
+                  constant = j.optBoolean("constant", false), selective = j.optBoolean("selective", false), selectiveLogic = j.optInt("selectiveLogic", 0),
+                  probability = j.optInt("probability", 100).coerceIn(0, 100), priority = j.optInt("priority", 50), scanDepth = j.optInt("scanDepth", 8),
+                  caseSensitive = j.optBoolean("caseSensitive", false), wholeWord = j.optBoolean("wholeWord", false),
+                  position = j.optString("position", "After Character")
+              )
+          }
+          
+          object CryptoStore {
+              private const val KEYSTORE = "AndroidKeyStore"
+              private const val ALIAS = "GreyRPApiKey"
+              private const val PREF = "greyrp_crypto"
+          
+              fun put(context: Context, name: String, value: String) {
+                  if (value.isBlank()) {
+                      context.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().remove(name).apply()
+                      return
+                  }
+                  try {
+                      val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                      cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+                      val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
+                      val payload = Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + ":" +
+                          Base64.encodeToString(encrypted, Base64.NO_WRAP)
+                      context.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString(name, payload).apply()
+                  } catch (_: Exception) {
+                      // If the keystore is unavailable, do not fall back to plaintext storage.
+                  }
+              }
+          
+              fun get(context: Context, name: String): String {
+                  val payload = context.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString(name, null)
+                      ?: return ""
+                  return try {
+                      val parts = payload.split(":", limit = 2)
+                      if (parts.size != 2) return ""
+                      val iv = Base64.decode(parts[0], Base64.NO_WRAP)
+                      val data = Base64.decode(parts[1], Base64.NO_WRAP)
+                      val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                      cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
+                      String(cipher.doFinal(data), Charsets.UTF_8)
+                  } catch (_: Exception) {
+                      ""
+                  }
+              }
+          
+              private fun getOrCreateKey(): SecretKey {
+                  val ks = KeyStore.getInstance(KEYSTORE).apply { load(null) }
+                  (ks.getKey(ALIAS, null) as? SecretKey)?.let { return it }
+          
+                  val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE)
+                  generator.init(
+                      KeyGenParameterSpec.Builder(
+                          ALIAS,
+                          KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+                      )
+                          .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                          .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                          .build()
+                  )
+                  return generator.generateKey()
+              }
+          }
+          GREYRP_EOF
+
+      - name: Create Gradle wrapper
+        run: gradle wrapper --gradle-version 8.9
+
+      - name: Build Debug APK
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk GreyRP-v1.2-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GreyRP-APK
+          path: GreyRP-v1.2-debug.apk
+          if-no-files-found: error
